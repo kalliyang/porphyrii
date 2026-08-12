@@ -1,0 +1,14 @@
+# Secrets — never commit
+.env
+.env.*
+*.env
+
+# Node / wrangler
+node_modules/
+.wrangler/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log

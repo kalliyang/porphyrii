@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the following metadata."
+title: "Porphyrii: A Latin Poetry Scansion and Recitation Toolkit"
+type: software
+authors:
+  - given-names: "Zhiping"
+    family-names: "Yang"
+    # orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"  # TODO: fill after ORCID registration (SETUP.md Phase 0 §0.4)
+abstract: >-
+  A Progressive Web Application for Classical Latin poetry macron
+  restoration, metrical scansion, and precise recitation. Uses
+  a two-tier LLM pipeline (guard model + reasoning model) for
+  scansion analysis, deterministic text-integrity validation for
+  anti-hallucination, a rule-based Latin G2P engine, and eSpeak NG
+  WebAssembly formant synthesis for classical pronunciation
+  without neural TTS.
+keywords:
+  - "Latin poetry"
+  - "scansion"
+  - "prosody"
+  - "text-to-speech"
+  - "digital humanities"
+  - "classical studies"
+  - "Latin pedagogy"
+license: AGPL-3.0
+version: 0.9.0
+repository-code: "https://github.com/kalliyang/porphyrii"
+url: "https://porphyrii.org"
