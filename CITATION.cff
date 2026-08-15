@@ -5,7 +5,7 @@ type: software
 authors:
   - given-names: "Zhiping"
     family-names: "Yang"
-    # orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"  # TODO: fill after ORCID registration (SETUP.md Phase 0 §0.4)
+    orcid: "https://orcid.org/0009-0003-4909-2014"
 abstract: >-
   A Progressive Web Application for Classical Latin poetry macron
   restoration, metrical scansion, and precise recitation. Uses
