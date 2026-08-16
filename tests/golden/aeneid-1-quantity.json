@@ -1,0 +1,358 @@
+{
+ "_meta": {
+  "construction": "frozen corpus text + documented annotation layer (elision parens per Pedecerto synalepha marks; solver-style syllable overrides; one flagged corpus macron fix at Aen.1.2). Reference = Pedecerto free-scansion tool queried 2026-08-17 with our own public-domain texts (per-line oracle use, no bulk harvesting); only derived weight patterns (facts) are stored.",
+  "grace": "comparison grace per G2P.md §4: reference X = anceps; derived line-final = anceps; derived mute+liquid-indeterminate (non-natural) accepts either value",
+  "divergences": "documented frozen-rule vs Pedecerto divergences — the engine follows the frozen rules; each entry is a rule-review candidate, not an engine bug",
+  "corpus": "aeneid-1-1-33.txt (Chamberlain, CC BY 4.0 — see README.md)",
+  "metre": "dactylic_hexameter"
+ },
+ "lines": [
+  {
+   "ref": "Aen.1.1",
+   "input": "Arma virumque canō, Troiae quī prīmus ab ōrīs",
+   "overrides": [],
+   "reference": "HLLHLLHHHHHLLHX",
+   "feet": "DDSS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.2",
+   "input": "Ītaliam, fātō profugus, Lāvīniaque vēnit",
+   "overrides": [
+    {
+     "word": "Lāvīniaque",
+     "split": "lā-vī-nja-que"
+    }
+   ],
+   "reference": "HLLHHHLLHHHLLHX",
+   "feet": "DSDS",
+   "annotations": [
+    "macron defect corrected at fixture layer: Lāviniaque → Lāvīniaque"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.3",
+   "input": "lītora, mult(um) ill(e) et terrīs iactātus et altō",
+   "overrides": [],
+   "reference": "HLLHHHHHHHLLHX",
+   "feet": "DSSS",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): mult(um) ill(e) et"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.4",
+   "input": "vī superum saevae memorem Iūnōnis ob īram;",
+   "overrides": [],
+   "reference": "HLLHHHLLHHHLLHX",
+   "feet": "DSDS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.5",
+   "input": "multa quoqu(e) et bellō passus, dum conderet urbem,",
+   "overrides": [],
+   "reference": "HLLHHHHHHHLLHX",
+   "feet": "DSSS",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): quoqu(e) et"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.6",
+   "input": "īnferretque deōs Latiō, genus unde Latīnum,",
+   "overrides": [],
+   "reference": "HHHLLHLLHLLHLLHX",
+   "feet": "SDDD",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.7",
+   "input": "Albānīque patrēs, atqu(e) altae moenia Rōmae.",
+   "overrides": [],
+   "reference": "HHHLLHHHHHLLHX",
+   "feet": "SDSS",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): atqu(e) altae"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.8",
+   "input": "Mūsa, mihī causās memorā, quō nūmine laesō,",
+   "overrides": [],
+   "reference": "HLLHHHLLHHHLLHX",
+   "feet": "DSDS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.9",
+   "input": "quidve dolēns, rēgīna deum tot volvere cāsūs",
+   "overrides": [],
+   "reference": "HLLHHHLLHHHLLHX",
+   "feet": "DSDS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.10",
+   "input": "īnsignem pietāte virum, tot adīre labōrēs",
+   "overrides": [],
+   "reference": "HHHLLHLLHLLHLLHX",
+   "feet": "SDDD",
+   "annotations": [],
+   "divergences": [
+    {
+     "index": 10,
+     "ortho": "tad",
+     "derived": "heavy",
+     "expected": "L",
+     "reason": "G2P.md §3-4 prefix forcing (ad+īre → ad.ī.re, d stays coda) vs Pedecerto a.dī.re — the metre requires light ta; frozen rule kept, reported as rule-review candidate"
+    }
+   ]
+  },
+  {
+   "ref": "Aen.1.11",
+   "input": "impulerit. Tantaen(e) animīs caelestibus īrae?",
+   "overrides": [],
+   "reference": "HLLHHHLLHHHLLHX",
+   "feet": "DSDS",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): Tantaen(e) animīs"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.12",
+   "input": "Urbs antīqua fuit, Tyriī tenuēre colōnī,",
+   "overrides": [],
+   "reference": "HHHLLHLLHLLHLLHX",
+   "feet": "SDDD",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.13",
+   "input": "Karthāg(ō), Ītaliam contrā Tiberīnaque longē",
+   "overrides": [],
+   "reference": "HHHLLHHHLLHLLHX",
+   "feet": "SDSD",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): Karthāg(ō), Ītaliam"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.14",
+   "input": "ōstia, dīves opum studiīsqu(e) asperrima bellī;",
+   "overrides": [],
+   "reference": "HLLHLLHLLHHHLLHX",
+   "feet": "DDDS",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): studiīsqu(e) asperrima"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.15",
+   "input": "quam Iūnō fertur terrīs magis omnibus ūnam",
+   "overrides": [],
+   "reference": "HHHHHHHLLHLLHX",
+   "feet": "SSSD",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.16",
+   "input": "posthabitā coluisse Samō; hīc illius arma,",
+   "overrides": [],
+   "reference": "HLLHLLHLLHHHLLHX",
+   "feet": "DDDS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.17",
+   "input": "hīc currus fuit; hoc rēgnum dea gentibus esse,",
+   "overrides": [],
+   "reference": "HHHLLHHHLLHLLHX",
+   "feet": "SDSD",
+   "annotations": [],
+   "divergences": [
+    {
+     "index": 4,
+     "ortho": "it",
+     "derived": "heavy",
+     "expected": "L",
+     "reason": "§3-10 semicolon blocks liaison (fuit; hoc → fu.it closed) vs Pedecerto resyllabifies across the semicolon (fui.thoc); frozen rule kept"
+    }
+   ]
+  },
+  {
+   "ref": "Aen.1.18",
+   "input": "sī quā fāta sinant, iam tum tenditque fovetque.",
+   "overrides": [],
+   "reference": "HHHLLHHHHHLLHX",
+   "feet": "SDSS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.19",
+   "input": "Prōgeniem sed enim Troiān(ō) ā sanguine dūcī",
+   "overrides": [],
+   "reference": "HLLHLLHHHHHLLHX",
+   "feet": "DDSS",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): Troiān(ō) ā"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.20",
+   "input": "audierat, Tyriās ōlim quae verteret arcēs;",
+   "overrides": [],
+   "reference": "HLLHLLHHHHHLLHX",
+   "feet": "DDSS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.21",
+   "input": "hinc populum lātē rēgem bellōque superbum",
+   "overrides": [],
+   "reference": "HLLHHHHHHHLLHX",
+   "feet": "DSSS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.22",
+   "input": "ventūr(um) excidiō Libyae: sīc volvere Parcās.",
+   "overrides": [],
+   "reference": "HHHLLHLLHHHLLHX",
+   "feet": "SDDS",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): ventūr(um) excidiō"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.23",
+   "input": "Id metuēns, veterisque memor Sāturnia bellī,",
+   "overrides": [],
+   "reference": "HLLHLLHLLHHHLLHX",
+   "feet": "DDDS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.24",
+   "input": "prīma quod ad Troiam prō cārīs gesserat Argīs",
+   "overrides": [],
+   "reference": "HLLHHHHHHHLLHX",
+   "feet": "DSSS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.25",
+   "input": "necd(um) etiam caus(ae) īrārum saevīque dolōrēs",
+   "overrides": [],
+   "reference": "HLLHHHHHHHLLHX",
+   "feet": "DSSS",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): necd(um) etiam",
+    "elision marked (Pedecerto synalepha): caus(ae) īrārum"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.26",
+   "input": "exciderant animō: manet altā mente repostum",
+   "overrides": [],
+   "reference": "HLLHLLHLLHHHLLHX",
+   "feet": "DDDS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.27",
+   "input": "iūdicium Paridis sprētaequ(e) iniūria fōrmae,",
+   "overrides": [],
+   "reference": "HLLHLLHHHHHLLHX",
+   "feet": "DDSS",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): sprētaequ(e) iniūria"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.28",
+   "input": "et genus invīs(um), et raptī Ganymēdis honōrēs.",
+   "overrides": [],
+   "reference": "HLLHHHHHLLHLLHX",
+   "feet": "DSSD",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): invīs(um), et"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.29",
+   "input": "Hīs accēnsa super, iactātōs aequore tōtō",
+   "overrides": [],
+   "reference": "HHHLLHHHHHLLHX",
+   "feet": "SDSS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.30",
+   "input": "Trōās, rēliquiās Dana(um) atqu(e) immītis Achillī,",
+   "overrides": [],
+   "reference": "HHHLLHLLHHHLLHX",
+   "feet": "SDDS",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): Dana(um) atqu(e) immītis"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.31",
+   "input": "arcēbat longē Latiō, multōsque per annōs",
+   "overrides": [],
+   "reference": "HHHHHLLHHHLLHX",
+   "feet": "SSDS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.32",
+   "input": "errābant, āctī fātīs, mari(a) omnia circum.",
+   "overrides": [],
+   "reference": "HHHHHHHLLHLLHX",
+   "feet": "SSSD",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): mari(a) omnia"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Aen.1.33",
+   "input": "Tantae mōlis erat Rōmānam condere gentem!",
+   "overrides": [],
+   "reference": "HHHLLHHHHHLLHX",
+   "feet": "SDSS",
+   "annotations": [],
+   "divergences": []
+  }
+ ]
+}

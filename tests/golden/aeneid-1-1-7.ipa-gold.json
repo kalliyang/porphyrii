@@ -1,0 +1,66 @@
+{
+  "_meta": {
+    "source": "kalli/gold-corpus/aeneid-1-1-7.ipa-gold.md (frozen 2026-08-16; rules G2P.md v1.0.2)",
+    "relationship": "machine-readable mirror; gold_ipa_md is verbatim from the frozen md (brackets stripped); expected_ipa is the rule-canonical rendering the engine must produce exactly",
+    "errata": "three notation slips in the frozen md (L1/L3 dropped dots, L2 lax notation) — expected_ipa follows the frozen RULES; reported for adjudication, md not modified by the implementation session"
+  },
+  "lines": [
+    {
+      "n": 1,
+      "input": "Arma virumque canō, Troiae quī prīmus ab ōrīs",
+      "overrides": [],
+      "gold_ipa_md": "ˈar.ma wɪˈrʊm.kʷɛ ˈka.noː ˈtrɔj.jaɪ̯ kʷiː ˈpriː.mʊ.sa.ˈboː.riːs",
+      "expected_ipa": "ˈar.ma wɪ.ˈrʊm.kʷɛ ˈka.noː ˈtrɔj.jaɪ̯ kʷiː ˈpriː.mʊ.sa.ˈboː.riːs",
+      "erratum": "gold md drops the syllable dot in \"wɪˈrʊm\" (engine writes wɪ.ˈrʊm); §10.2 own syllabification column has vi.rum.que"
+    },
+    {
+      "n": 2,
+      "input": "Ītaliam, fātō profugus, Lāvīniaque vēnit",
+      "overrides": [
+        {
+          "word": "Lāvīniaque",
+          "split": "lā-vī-nja-que"
+        }
+      ],
+      "gold_ipa_md": "iː.ˈta.li.am ˈfaː.toː ˈprɔ.fʊ.ɡʊs laː.wiː.ˈnja.kʷɛ ˈweː.nɪt",
+      "expected_ipa": "iː.ˈta.lɪ.am ˈfaː.toː ˈprɔ.fʊ.ɡʊs laː.wiː.ˈnja.kʷɛ ˈweː.nɪt",
+      "erratum": "gold md writes \"ta.li.am\" with tense i; J9 lax consistency (cf. L6 \"tɪ\") requires lɪ"
+    },
+    {
+      "n": 3,
+      "input": "lītora, mult(um) ill(e) et terrīs iactātus et altō",
+      "overrides": [],
+      "gold_ipa_md": "ˈliː.tɔ.ra ˈmʊlt ˈɪlː.ɛt ˈtɛrː.iːs jakˈtaː.tʊ.sɛ.ˈtal.toː",
+      "expected_ipa": "ˈliː.tɔ.ra ˈmʊlt ˈɪlː.ɛt ˈtɛrː.iːs jak.ˈtaː.tʊ.sɛ.ˈtal.toː",
+      "erratum": "gold md drops the syllable dot in \"jakˈtaː\" (engine writes jak.ˈtaː)"
+    },
+    {
+      "n": 4,
+      "input": "vī superum, saevae memorem Iūnōnis ob īram",
+      "overrides": [],
+      "gold_ipa_md": "ˈwiː ˈsʊ.pɛ.rʊm ˈsaɪ̯.waɪ̯ ˈmɛ.mɔ.rɛm juː.ˈnoː.nɪ.sɔ.ˈbiː.ram",
+      "expected_ipa": "ˈwiː ˈsʊ.pɛ.rʊm ˈsaɪ̯.waɪ̯ ˈmɛ.mɔ.rɛm juː.ˈnoː.nɪ.sɔ.ˈbiː.ram"
+    },
+    {
+      "n": 5,
+      "input": "multa quoqu(e) et bellō passus, dum conderet urbem",
+      "overrides": [],
+      "gold_ipa_md": "ˈmʊl.ta ˈkʷɔ.kʷɛt ˈbɛlː.oː ˈpasː.ʊs dʊm ˈkɔn.dɛ.rɛ.ˈtʊr.bɛm",
+      "expected_ipa": "ˈmʊl.ta ˈkʷɔ.kʷɛt ˈbɛlː.oː ˈpasː.ʊs dʊm ˈkɔn.dɛ.rɛ.ˈtʊr.bɛm"
+    },
+    {
+      "n": 6,
+      "input": "īnferretque deōs Latiō, genus unde Latīnum",
+      "overrides": [],
+      "gold_ipa_md": "iːn.fɛrː.ˈɛt.kʷɛ ˈdɛ.oːs ˈla.tɪ.oː ˈɡɛ.nʊ.ˈsʊn.dɛ la.ˈtiː.nʊm",
+      "expected_ipa": "iːn.fɛrː.ˈɛt.kʷɛ ˈdɛ.oːs ˈla.tɪ.oː ˈɡɛ.nʊ.ˈsʊn.dɛ la.ˈtiː.nʊm"
+    },
+    {
+      "n": 7,
+      "input": "Albānīque patrēs, atqu(e) altae moenia Rōmae",
+      "overrides": [],
+      "gold_ipa_md": "al.baː.ˈniː.kʷɛ ˈpa.treːs at.ˈkʷal.taɪ̯ ˈmoɪ̯.nɪ.a ˈroː.maɪ̯",
+      "expected_ipa": "al.baː.ˈniː.kʷɛ ˈpa.treːs at.ˈkʷal.taɪ̯ ˈmoɪ̯.nɪ.a ˈroː.maɪ̯"
+    }
+  ]
+}

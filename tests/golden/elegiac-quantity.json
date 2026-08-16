@@ -1,0 +1,204 @@
+{
+ "_meta": {
+  "construction": "frozen corpus text + documented annotation layer (elision parens per Pedecerto synalepha marks; solver-style syllable overrides; one flagged corpus macron fix at Aen.1.2). Reference = Pedecerto free-scansion tool queried 2026-08-17 with our own public-domain texts (per-line oracle use, no bulk harvesting); only derived weight patterns (facts) are stored.",
+  "grace": "comparison grace per G2P.md §4: reference X = anceps; derived line-final = anceps; derived mute+liquid-indeterminate (non-natural) accepts either value",
+  "divergences": "documented frozen-rule vs Pedecerto divergences — the engine follows the frozen rules; each entry is a rule-review candidate, not an engine bug",
+  "corpus": "elegiac-candidates.md (public-domain texts, lab macron draft — see README.md)",
+  "metre": "elegiac_couplet (alternating hexameter/pentameter)"
+ },
+ "lines": [
+  {
+   "ref": "Ov.Am.1.1.1",
+   "input": "Arma gravī numerō violentaque bella parābam",
+   "overrides": [],
+   "reference": "HLLHLLHLLHLLHLLHX",
+   "feet": "DDDD",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Ov.Am.1.1.2",
+   "input": "ēdere, māteriā conveniente modīs.",
+   "overrides": [],
+   "reference": "HLLHLLHHLLHLLH",
+   "feet": "DD&#151;|DD&#151;",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Ov.Am.1.1.3",
+   "input": "pār erat īnferior versus; rīsisse Cupīdō",
+   "overrides": [],
+   "reference": "HLLHLLHHHHHLLHX",
+   "feet": "DDSS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Ov.Am.1.1.4",
+   "input": "dīcitur atqu(e) ūnum surripuisse pedem.",
+   "overrides": [],
+   "reference": "HLLHHHHLLHLLH",
+   "feet": "DS&#151;|DD&#151;",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Cat.85.1",
+   "input": "Ōd(ī) et amō. Quār(ē) id faciam fortasse requīris.",
+   "overrides": [],
+   "reference": "HLLHHHLLHHHLLHX",
+   "feet": "DSDS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Cat.85.2",
+   "input": "Nescio, sed fierī senti(ō) et excrucior.",
+   "overrides": [],
+   "reference": "HLLHLLHHLLHLLH",
+   "feet": "DD&#151;|DD&#151;",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Cat.101.1",
+   "input": "Multās per gentēs et multa per aequora vectus",
+   "overrides": [],
+   "reference": "HHHHHHHLLHLLHX",
+   "feet": "SSSD",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Cat.101.2",
+   "input": "adveni(ō) hās miserās, frāter, ad īnferiās,",
+   "overrides": [],
+   "reference": "HLLHLLHHLLHLLH",
+   "feet": "DD&#151;|DD&#151;",
+   "annotations": [],
+   "divergences": [
+    {
+     "index": 8,
+     "ortho": "ter",
+     "derived": "heavy",
+     "expected": "L",
+     "reason": "§3-10 comma blocks liaison (frāter, ad) vs Pedecerto links r (frā.te.rad); frozen rule kept"
+    }
+   ]
+  },
+  {
+   "ref": "Cat.101.3",
+   "input": "ut tē postrēmō dōnārem mūnere mortis",
+   "overrides": [],
+   "reference": "HHHHHHHHHLLHX",
+   "feet": "SSSS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Cat.101.4",
+   "input": "et mūtam nēquīqu(am) adloquerer cinerem,",
+   "overrides": [],
+   "reference": "HHHHHHLLHLLH",
+   "feet": "SS&#151;|DD&#151;",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): nēquīqu(am) adloquerer — not marked in frozen file"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Cat.101.5",
+   "input": "quandoquidem fortūna mihī tēt(e) abstulit ipsum,",
+   "overrides": [],
+   "reference": "HLLHHHLLHHHLLHX",
+   "feet": "DSDS",
+   "annotations": [],
+   "divergences": []
+  },
+  {
+   "ref": "Cat.101.6",
+   "input": "heu miser indignē frāter adēmpte mihī,",
+   "overrides": [],
+   "reference": "HLLHHHHLLHLLH",
+   "feet": "DS&#151;|DD&#151;",
+   "annotations": [],
+   "divergences": [
+    {
+     "index": 8,
+     "ortho": "rad",
+     "derived": "heavy",
+     "expected": "L",
+     "reason": "§3-4 prefix forcing (ad+ēmpte) vs Pedecerto a.dēmp.te — second attestation of the ad- divergence (cf. Aen.1.10)"
+    }
+   ]
+  },
+  {
+   "ref": "Cat.101.7",
+   "input": "nunc tamen intere(ā) haec, prīscō quae mōre parentum",
+   "overrides": [],
+   "reference": "HLLHLLHHHHHLLHX",
+   "feet": "DDSS",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): intere(ā) haec — not marked in frozen file"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Cat.101.8",
+   "input": "trādita sunt trīstī mūner(e) ad īnferiās,",
+   "overrides": [],
+   "reference": "HLLHHHHLLHLLH",
+   "feet": "DS&#151;|DD&#151;",
+   "annotations": [
+    "elision marked (Pedecerto synalepha): mūner(e) ad — not marked in frozen file"
+   ],
+   "divergences": []
+  },
+  {
+   "ref": "Cat.101.9",
+   "input": "accipe frāternō multum mānantia flētū,",
+   "overrides": [],
+   "reference": "HLLHHHHHHHLLHX",
+   "feet": "DSSS",
+   "annotations": [
+    "frozen file's mult(um) elision mark REMOVED at fixture layer: -um cannot elide before consonant m- (impossible elision; Pedecerto confirms no synalepha) — frozen-corpus residual error, documented for adjudication"
+   ],
+   "divergences": [
+    {
+     "index": 2,
+     "ortho": "pe",
+     "derived": "heavy",
+     "expected": "L",
+     "reason": "§4-2 cross-word position: pe + fr- (f not in the §3-3 mute set) vs Pedecerto light — metre requires ac.ci.pe (HLL)"
+    },
+    {
+     "index": 11,
+     "ortho": "a",
+     "derived": "heavy",
+     "expected": "L",
+     "reason": "§4-2 cross-word position: -a + fl- vs Pedecerto light; the frozen corpus's own note scans tĭ-ă flē- (HLL), i.e. the annotation already assumes fl does not make position"
+    }
+   ]
+  },
+  {
+   "ref": "Cat.101.10",
+   "input": "atqu(e) in perpetuum, frāter, av(e) atque valē.",
+   "overrides": [],
+   "reference": "HHHLLHHLLHLLH",
+   "feet": "SD&#151;|DD&#151;",
+   "annotations": [
+    "elisions marked (Pedecerto synalepha): atqu(e) in, av(e) atque — not marked in frozen file"
+   ],
+   "divergences": [
+    {
+     "index": 7,
+     "ortho": "ter",
+     "derived": "heavy",
+     "expected": "L",
+     "reason": "§3-10 comma blocks liaison (frāter, av(e)) vs Pedecerto links r; frozen rule kept"
+    }
+   ]
+  }
+ ]
+}
