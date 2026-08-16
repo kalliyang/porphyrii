@@ -1,0 +1,39 @@
+name: Deploy to Cloudflare Pages
+
+# Direct Upload deployment: the repo content IS the site (static assets +
+# Pages Functions); no build step. Deploys to production on every push to
+# main. Pull requests get preview deployments via wrangler-action.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Unit tests (text-integrity, precheck, contract)
+        run: node --test
+
+  deploy:
+    needs: test
+    # Only deploy from the main repo, never from forks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy . --project-name=porphyrii

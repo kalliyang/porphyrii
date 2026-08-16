@@ -1,0 +1,4 @@
+# Not part of the deployed site (Cloudflare Pages asset exclusion)
+/tests/
+/.github/
+/package.json
