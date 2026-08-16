@@ -30,8 +30,12 @@ import { validateAnalysis } from "./contract.js";
 
 const GUARD_TIMEOUT_MS = 20_000;
 const SOLVER_TIMEOUT_MS = 90_000;
-const GUARD_MAX_TOKENS = 1_024;
-const SOLVER_MAX_TOKENS = 8_192;
+// Thinking models burn reasoning tokens INSIDE the output budget on both
+// providers (measured 2026-08-16: gemini-3.7-flash thought 2.3k + answered
+// 3.9k on 7 lines; deepseek-v4-pro reasoned 9.5k tokens on ONE line). Caps
+// must carry thinking headroom, not just the visible JSON.
+const GUARD_MAX_TOKENS = 4_096;
+const SOLVER_MAX_TOKENS = 32_768;
 
 class TransportError extends Error {}
 
