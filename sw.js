@@ -54,10 +54,16 @@ const PRECACHE = [
 ];
 
 self.addEventListener("install", (event) => {
+  // cache: "reload" bypasses the browser HTTP cache: Pages serves assets
+  // with max-age=14400, and a plain addAll could otherwise precache STALE
+  // module versions after a deploy (mixed-version app shell). The VERSION
+  // bump must always fetch fresh bytes.
   event.waitUntil(
     caches
       .open(PRECACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE))
+      .then((cache) =>
+        cache.addAll(PRECACHE.map((u) => new Request(u, { cache: "reload" })))
+      )
       .then(() => self.skipWaiting())
   );
 });
