@@ -95,6 +95,66 @@ const AEN11_CONTRACT = {
   ],
 };
 
+// Aen. 1.3 — two elisions (mult(um), ill(e)) plus liaisons (let/se/tal).
+// Feet/syllables derived from the engine's own analysis of the gold-corpus
+// line (2026-08-17); elided written syllables included with elided: true as
+// the solver sends them.
+const AEN13_CONTRACT = {
+  scansion_text: "lītora, mult(um) ill(e) et terrīs iactātus et altō",
+  meter: "dactylic_hexameter",
+  scansion: [
+    {
+      line: 1,
+      text: "lītora, mult(um) ill(e) et terrīs iactātus et altō",
+      feet: [
+        [
+          { s: "lī", q: "long", elided: false },
+          { s: "to", q: "short", elided: false },
+          { s: "ra", q: "short", elided: false },
+        ],
+        [
+          { s: "mult", q: "long", elided: false },
+          { s: "tum", q: "long", elided: true },
+          { s: "il", q: "long", elided: false },
+          { s: "le", q: "short", elided: true },
+        ],
+        [
+          { s: "let", q: "long", elided: false },
+          { s: "ter", q: "long", elided: false },
+        ],
+        [
+          { s: "rīs", q: "long", elided: false },
+          { s: "iac", q: "long", elided: false },
+        ],
+        [
+          { s: "tā", q: "long", elided: false },
+          { s: "tu", q: "short", elided: false },
+          { s: "se", q: "short", elided: false },
+        ],
+        [
+          { s: "tal", q: "long", elided: false },
+          { s: "tō", q: "long", elided: false },
+        ],
+      ],
+    },
+  ],
+};
+
+test("transport: elision lines bucket by pronounced letters (F-11 / F-W6-1)", () => {
+  // Pre-F-11 the per-word letter count came from words[].surface, which
+  // keeps the elided letters ("multum" = 6 vs the solver's pronounced
+  // "mult" = 4) — every elision line falsely reported "solver syllable
+  // letters do not reconstruct the text letters". The solver here agrees
+  // with the engine everywhere, so there must be no problem and no
+  // override; the elided syllables (tum/le) are filtered before bucketing.
+  const { overrides, problems } = contractSyllableOverrides(AEN13_CONTRACT);
+  assert.deepEqual(problems, []);
+  assert.deepEqual(overrides, []);
+  const r = validateScansion(AEN13_CONTRACT);
+  assert.equal(r.ok, true);
+  assert.equal(r.mismatchCount, 0);
+});
+
 test("transport: solver synizesis becomes exactly the gold override", () => {
   const { overrides, problems } = contractSyllableOverrides(AEN12_CONTRACT);
   assert.deepEqual(problems, []);

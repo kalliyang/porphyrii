@@ -25,6 +25,16 @@
  * general synizesis needing letter substitution (aurea → au-rja) is
  * rejected there, loudly. Solver syllable strings are expected in the
  * j/w phonetic spelling (PROMPTS.md clause, G2P.md §10.2 note style).
+ *
+ * F-11 (2026-08-17, F-W6-1): per-word pronounced letters come from
+ * words[].pronounced (the tokenizer's own paren-stripped stream). The
+ * pre-F-11 code re-derived them from words[].surface, which KEEPS the
+ * elided letters (tokenizeLine strips only the paren characters, not
+ * the parenthesized letters) — so every line containing an elision
+ * mis-bucketed and falsely reported "solver syllable letters do not
+ * reconstruct the text letters". derivedLine.syllables is NOT a valid
+ * substitute: its word attribution is display-level (liaison moves
+ * letters across word boundaries, F-10).
  */
 
 import { analyzeLatin } from "./latin-g2p.js";
@@ -46,18 +56,6 @@ const normCps = (cps) =>
   });
 
 const VOWELS = new Set(["a", "e", "i", "o", "u", "y"]);
-
-// Pronounced letters of a word surface (elision-parens content removed).
-function pronouncedCps(surface) {
-  const out = [];
-  let depth = 0;
-  for (const ch of surface.normalize("NFC")) {
-    if (ch === "(") depth++;
-    else if (ch === ")") depth = Math.max(0, depth - 1);
-    else if (depth === 0) out.push(ch);
-  }
-  return out;
-}
 
 /**
  * Derive G2P syllable overrides from an analyze-response contract.
@@ -95,11 +93,11 @@ export function contractSyllableOverrides(contract) {
       return;
     }
 
-    // Bucket solver syllables over the line's words by letter count,
-    // splitting a cross-word (liaison) syllable at the boundary.
+    // Bucket solver syllables over the line's words by pronounced-letter
+    // count, splitting a cross-word (liaison) syllable at the boundary.
     const words = derivedLine.words;
     const wordLetterCount = (w) =>
-      normCps(pronouncedCps(words[w].surface)).length;
+      normCps([...words[w].pronounced]).length;
     const buckets = words.map(() => []); // per word: [{text, norm, partial}]
     let wi = 0;
     let remaining = words.length > 0 ? wordLetterCount(0) : 0;
@@ -147,7 +145,7 @@ export function contractSyllableOverrides(contract) {
     words.forEach((word, w) => {
       const bucket = buckets[w];
       const bucketNorm = bucket.flatMap((f) => f.norm).join("");
-      const wordNorm = normCps(pronouncedCps(word.surface)).join("");
+      const wordNorm = normCps([...word.pronounced]).join("");
       if (bucketNorm !== wordNorm) {
         problems.push({
           line: lineNo,

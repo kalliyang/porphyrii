@@ -1088,8 +1088,8 @@ function analyzeWord(token, overrideSplit) {
  *   lines: Array<{
  *     index: number, surface: string, ipa: string,
  *     syllables: Array<object>,
- *     words: Array<{ index:number, surface:string, key:string,
- *                    functionWord:boolean, syllableCount:number,
+ *     words: Array<{ index:number, surface:string, pronounced:string,
+ *                    key:string, functionWord:boolean, syllableCount:number,
  *                    stressedSyllable:number|null }>
  *   }>
  * }}
@@ -1136,6 +1136,13 @@ export function analyzeLatin(text, options = {}) {
       words: words.map((w, wi) => ({
         index: wi,
         surface: w.token.surface,
+        // F-11 (2026-08-17, F-W6-1): pronounced letters (parenthesized
+        // elision segments removed at tokenize time) — the source-accurate
+        // per-word letter stream for the syllable-overrides transport;
+        // derivedLine.syllables word attribution is display-level only
+        // (liaison moves letters across it, F-10) and must not be used
+        // for letter accounting.
+        pronounced: w.token.pronounced,
         key: w.key,
         functionWord: FUNCTION_WORDS.has(w.key),
         syllableCount: w.syllables.length,
