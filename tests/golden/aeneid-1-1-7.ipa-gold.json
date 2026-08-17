@@ -1,38 +1,36 @@
 {
   "_meta": {
-    "source": "kalli/gold-corpus/aeneid-1-1-7.ipa-gold.md (frozen 2026-08-16; rules G2P.md v1.0.2)",
+    "source": "kalli/gold-corpus/aeneid-1-1-7.ipa-gold.md (frozen 2026-08-16; rules G2P.md v1.0.3)",
     "relationship": "machine-readable mirror; gold_ipa_md is verbatim from the frozen md (brackets stripped); expected_ipa is the rule-canonical rendering the engine must produce exactly",
-    "errata": "three notation slips in the frozen md (L1/L3 dropped dots, L2 lax notation) — expected_ipa follows the frozen RULES; reported for adjudication, md not modified by the implementation session"
+    "errata": "six notation slips in the pre-v1.0.3 frozen docs, adjudicated D8/D9 and corrected at source 2026-08-17 (md and mirror now agree): (1) L1 md dropped the syllable dot in \"wɪˈrʊm\" → wɪ.ˈrʊm (fixed in gold md + G2P.md §10/§10.2); (2) L3 md dropped the dot in \"jakˈtaː\" → jak.ˈtaː (gold md + G2P.md §10.2); (3) L2 md wrote \"ta.li.am\" with tense i → lax ta.lɪ.am per J9 (gold md + G2P.md §10.2); (4) G2P.md §2.3 eius example [ˈej.jʊs] → [ˈɛj.jʊs] (J9/F16: lax before jj); (5) G2P.md §2.2 huic example [hʊj] → [hʊjk] (final c → k; also fixed in la-mapping-v0.1.0.json metadata); (6) G2P.md §2.1 short y [ʏ] → [y] (la.json v0.1.0 contract; ʏ deferred to a future mapping extension)",
+    "overrides": "2026-08-17 (F-09): word selectors are numeric 0-based indices (was the surface string \"Lāvīniaque\")"
   },
   "lines": [
     {
       "n": 1,
       "input": "Arma virumque canō, Troiae quī prīmus ab ōrīs",
       "overrides": [],
-      "gold_ipa_md": "ˈar.ma wɪˈrʊm.kʷɛ ˈka.noː ˈtrɔj.jaɪ̯ kʷiː ˈpriː.mʊ.sa.ˈboː.riːs",
-      "expected_ipa": "ˈar.ma wɪ.ˈrʊm.kʷɛ ˈka.noː ˈtrɔj.jaɪ̯ kʷiː ˈpriː.mʊ.sa.ˈboː.riːs",
-      "erratum": "gold md drops the syllable dot in \"wɪˈrʊm\" (engine writes wɪ.ˈrʊm); §10.2 own syllabification column has vi.rum.que"
+      "gold_ipa_md": "ˈar.ma wɪ.ˈrʊm.kʷɛ ˈka.noː ˈtrɔj.jaɪ̯ kʷiː ˈpriː.mʊ.sa.ˈboː.riːs",
+      "expected_ipa": "ˈar.ma wɪ.ˈrʊm.kʷɛ ˈka.noː ˈtrɔj.jaɪ̯ kʷiː ˈpriː.mʊ.sa.ˈboː.riːs"
     },
     {
       "n": 2,
       "input": "Ītaliam, fātō profugus, Lāvīniaque vēnit",
       "overrides": [
         {
-          "word": "Lāvīniaque",
+          "word": 3,
           "split": "lā-vī-nja-que"
         }
       ],
-      "gold_ipa_md": "iː.ˈta.li.am ˈfaː.toː ˈprɔ.fʊ.ɡʊs laː.wiː.ˈnja.kʷɛ ˈweː.nɪt",
-      "expected_ipa": "iː.ˈta.lɪ.am ˈfaː.toː ˈprɔ.fʊ.ɡʊs laː.wiː.ˈnja.kʷɛ ˈweː.nɪt",
-      "erratum": "gold md writes \"ta.li.am\" with tense i; J9 lax consistency (cf. L6 \"tɪ\") requires lɪ"
+      "gold_ipa_md": "iː.ˈta.lɪ.am ˈfaː.toː ˈprɔ.fʊ.ɡʊs laː.wiː.ˈnja.kʷɛ ˈweː.nɪt",
+      "expected_ipa": "iː.ˈta.lɪ.am ˈfaː.toː ˈprɔ.fʊ.ɡʊs laː.wiː.ˈnja.kʷɛ ˈweː.nɪt"
     },
     {
       "n": 3,
       "input": "lītora, mult(um) ill(e) et terrīs iactātus et altō",
       "overrides": [],
-      "gold_ipa_md": "ˈliː.tɔ.ra ˈmʊlt ˈɪlː.ɛt ˈtɛrː.iːs jakˈtaː.tʊ.sɛ.ˈtal.toː",
-      "expected_ipa": "ˈliː.tɔ.ra ˈmʊlt ˈɪlː.ɛt ˈtɛrː.iːs jak.ˈtaː.tʊ.sɛ.ˈtal.toː",
-      "erratum": "gold md drops the syllable dot in \"jakˈtaː\" (engine writes jak.ˈtaː)"
+      "gold_ipa_md": "ˈliː.tɔ.ra ˈmʊlt ˈɪlː.ɛt ˈtɛrː.iːs jak.ˈtaː.tʊ.sɛ.ˈtal.toː",
+      "expected_ipa": "ˈliː.tɔ.ra ˈmʊlt ˈɪlː.ɛt ˈtɛrː.iːs jak.ˈtaː.tʊ.sɛ.ˈtal.toː"
     },
     {
       "n": 4,

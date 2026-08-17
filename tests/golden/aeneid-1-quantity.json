@@ -21,7 +21,7 @@
    "input": "Ītaliam, fātō profugus, Lāvīniaque vēnit",
    "overrides": [
     {
-     "word": "Lāvīniaque",
+     "word": 3,
      "split": "lā-vī-nja-que"
     }
    ],
@@ -107,16 +107,10 @@
    "overrides": [],
    "reference": "HHHLLHLLHLLHLLHX",
    "feet": "SDDD",
-   "annotations": [],
-   "divergences": [
-    {
-     "index": 10,
-     "ortho": "tad",
-     "derived": "heavy",
-     "expected": "L",
-     "reason": "G2P.md §3-4 prefix forcing (ad+īre → ad.ī.re, d stays coda) vs Pedecerto a.dī.re — the metre requires light ta; frozen rule kept, reported as rule-review candidate"
-    }
-   ]
+   "annotations": [
+    "divergence closed 2026-08-17 (D1, G2P.md v1.0.3): the §3-4 vowel-initial root branch was removed — adīre syllabifies a.dī.re and the liaison syllable ta is light, matching Pedecerto"
+   ],
+   "divergences": []
   },
   {
    "ref": "Aen.1.11",

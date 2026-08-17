@@ -122,16 +122,10 @@
    "overrides": [],
    "reference": "HLLHHHHLLHLLH",
    "feet": "DS&#151;|DD&#151;",
-   "annotations": [],
-   "divergences": [
-    {
-     "index": 8,
-     "ortho": "rad",
-     "derived": "heavy",
-     "expected": "L",
-     "reason": "§3-4 prefix forcing (ad+ēmpte) vs Pedecerto a.dēmp.te — second attestation of the ad- divergence (cf. Aen.1.10)"
-    }
-   ]
+   "annotations": [
+    "divergence closed 2026-08-17 (D1, G2P.md v1.0.3): the §3-4 vowel-initial root branch was removed — adēmpte syllabifies a.dēmp.te and ra is light, matching Pedecerto"
+   ],
+   "divergences": []
   },
   {
    "ref": "Cat.101.7",
@@ -164,21 +158,9 @@
    "annotations": [
     "frozen file's mult(um) elision mark REMOVED at fixture layer: -um cannot elide before consonant m- (impossible elision; Pedecerto confirms no synalepha) — frozen-corpus residual error, documented for adjudication"
    ],
-   "divergences": [
-    {
-     "index": 2,
-     "ortho": "pe",
-     "derived": "heavy",
-     "expected": "L",
-     "reason": "§4-2 cross-word position: pe + fr- (f not in the §3-3 mute set) vs Pedecerto light — metre requires ac.ci.pe (HLL)"
-    },
-    {
-     "index": 11,
-     "ortho": "a",
-     "derived": "heavy",
-     "expected": "L",
-     "reason": "§4-2 cross-word position: -a + fl- vs Pedecerto light; the frozen corpus's own note scans tĭ-ă flē- (HLL), i.e. the annotation already assumes fl does not make position"
-    }
+   "divergences": [],
+   "grace_notes": [
+    "2026-08-17 (D2, G2P.md v1.0.3 §4-2): cross-word f + r/l joined the mute+liquid grace — pe (@2, before frāternō) and a (@11, before flētū) are now ml-indeterminate and agree with the reference either way; the §3-3 word-internal mute set is unchanged"
    ]
   },
   {

@@ -129,3 +129,39 @@ test("dynamic: exception-word outputs tokenize (cui/huic/suādeō/cōnsul)", () 
     assert.deepEqual(findUnmappable(ipa), [], `unmappable in: ${ipa}`);
   }
 });
+
+test("F-12: every consonant that can reach the geminate path stays mappable", () => {
+  // Synthetic adjacency probes for every consonant letter/digraph the
+  // tokenizer accepts. Lengthenable consonants must render the canonical
+  // Cː (a la.json row); everything else must render two separately
+  // mappable phonemes — the renderer must NEVER emit an unlisted Cː.
+  const lengthenable = [
+    ["abba", "bː"], ["acca", "kː"], ["adda", "dː"], ["affa", "fː"],
+    ["agga", "ɡː"], ["alla", "lː"], ["amma", "mː"], ["anna", "nː"],
+    ["appa", "pː"], ["arra", "rː"], ["assa", "sː"], ["atta", "tː"],
+  ];
+  const neverPaired = [
+    "avva",    // w
+    "ajja",    // j (J8 doubled exception: j.j, never jː)
+    "azzus",   // z
+    "aququa",  // kʷ
+    "aphpha",  // pʰ
+    "aththa",  // tʰ
+    "achcha",  // kʰ
+  ];
+  for (const [input, gem] of lengthenable) {
+    const { ipa } = analyzeLatin(input);
+    assert.deepEqual(findUnmappable(ipa), [], `${input}: unmappable in ${ipa}`);
+    assert.ok(ipa.includes(gem), `${input}: expected ${gem} in ${ipa}`);
+  }
+  for (const input of neverPaired) {
+    const { ipa } = analyzeLatin(input);
+    assert.deepEqual(findUnmappable(ipa), [], `${input}: unmappable in ${ipa}`);
+    assert.ok(!ipa.includes("ː"), `${input}: unexpected length mark in ${ipa}`);
+  }
+  // the inventory's geminate list is exactly the lengthenable set above
+  assert.deepEqual(
+    [...IPA_INVENTORY.geminates].sort(),
+    lengthenable.map(([, g]) => g).sort()
+  );
+});

@@ -8,8 +8,9 @@
  * EXACTLY — both sides derive from the same frozen rules, so any mismatch is
  * an implementation bug or a rule-doc ambiguity to escalate, never something
  * to tune away. The fixture also carries the frozen md verbatim
- * (gold_ipa_md) with three documented notation errata (L1/L3 dropped
- * syllable dots, L2 lax notation) reported for adjudication.
+ * (gold_ipa_md); the six pre-v1.0.3 notation errata were adjudicated (D8/D9)
+ * and corrected at source 2026-08-17, so md and expected now agree — the
+ * integrity test keeps guarding any FUTURE divergence.
  *
  * Run: node --test tests/unit/
  */
@@ -43,11 +44,10 @@ test("fixture integrity: expected_ipa and gold_ipa_md differ only where an errat
       `line ${line.n} diverges from the frozen md without a documented erratum`
     );
     // errata are notation-level only: phoneme content must be identical
-    // once syllable dots are ignored and the one lax/tense slip normalized
-    const normalize = (s) =>
-      s.replaceAll(".", "").replace("ta.li.am", "ta.lɪ.am").normalize("NFC");
+    // once syllable dots are ignored
+    const normalize = (s) => s.replaceAll(".", "").normalize("NFC");
     assert.equal(
-      normalize(line.gold_ipa_md.replace("ta.li.am", "ta.lɪ.am")),
+      normalize(line.gold_ipa_md),
       normalize(line.expected_ipa),
       `line ${line.n} erratum is not notation-only`
     );

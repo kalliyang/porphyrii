@@ -8,7 +8,7 @@
     "reviewResolutions": [
       "r-sounds (2026-08-15): single r = R (trill, Allen Vox Latina); geminate rː = R: (probe: R: ≈ RR acoustically, both non-silent). The ɾ tap alias was removed — a hard error on ɾ input surfaces caller bugs (INTERFACE.md §4).",
       "Short-vowel quality (2026-08-15): canonical caller output uses lax symbols ɪ ʊ ɛ ɔ for short i/u/e/o (Allen ch. 2; matches espeak la lax targets); tense aliases kept for input tolerance.",
-      "ui diphthong (2026-08-15): cui/huic = [kʊj]/[hʊj] via existing ʊ + j phonemes; no uI row (see conventions).",
+      "ui diphthong (2026-08-15): cui/huic = [kʊj]/[hʊjk] via existing ʊ + j phonemes; no uI row (see conventions). (metadata erratum 2026-08-17, D9: huic realized form was written [hʊj], dropping the final c → k; mapping rules unchanged — still byte-identical to upstream la.json v0.1.0)",
       "Aspiration (2026-08-15): included as pʰ/tʰ/kʰ → stop + h sequences (ph_latin defines h as the ʰ modifier; probe non-silent). Not simplified to plain p/t/k.",
       "z (2026-08-15): z row added (base-table phoneme; probe non-silent, RMS ≈ s). Callers emit [zd] for Greek loanwords per Allen."
     ]
