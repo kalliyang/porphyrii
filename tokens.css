@@ -1,0 +1,102 @@
+/* GENERATED from tokens.json — do not edit. Run `python3 build.py`. */
+/* Version 1.0.0 (2026-08-10) */
+
+:root {
+  --ds-color-brand-title: #66023C;
+  --ds-color-section-title: #A52A2A;
+  --ds-color-link: #AA4A3B;
+  --ds-color-error: #A52A2A;
+  --ds-color-success: #5B6D50;
+  --ds-color-warning: #E2A76F;
+  --ds-color-highlight-border: #E2A76F;
+  --ds-color-surface-base: #F4F5F0;
+  --ds-color-surface-raised: #EAECE6;
+  --ds-color-text-primary: #2C3E50;
+  /* pigments (raw atoms; prefer role tokens above) */
+  --ds-pigment-tyrian-purple: #66023C;
+  --ds-pigment-athenian-gold: #D4AF37;
+  --ds-pigment-madder-lake: #A52A2A;
+  --ds-pigment-cinnabar: #EB6E56;
+  --ds-pigment-terra-cotta: #AA4A3B;
+  --ds-pigment-terra-cotta-light: #D0826A;
+  --ds-pigment-attic-ochre: #E2A76F;
+  --ds-pigment-terre-verte: #5B6D50;
+  --ds-pigment-malachite: #63B08C;
+  --ds-pigment-carrara-marble: #F4F5F0;
+  --ds-pigment-travertine: #EAECE6;
+  --ds-pigment-slate-gray: #2C3E50;
+  --ds-pigment-basaltes: #1A1C20;
+  --ds-pigment-obsidianus: #24272D;
+  --ds-pigment-creta: #DFE2DA;
+  --ds-pigment-atramentum: #232323;
+
+  /* typography */
+  --ds-font-serif-classical: Cardo, New Athena Unicode, Gentium Plus, Noto Serif SC, Source Han Serif SC, Songti SC, STSong, SimSun, Yu Mincho, serif;
+  --ds-font-sans-ui: Inter, -apple-system, BlinkMacSystemFont, Roboto, Noto Sans SC, Source Han Sans SC, PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif;
+  --ds-font-display: Cinzel, Cardo, serif;
+  --ds-font-mono: ui-monospace, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+  --ds-text-micro: 0.778rem;
+  --ds-text-small: 0.889rem;
+  --ds-text-body: 1.125rem;
+  --ds-text-h4: 1.25rem;
+  --ds-text-h3: 1.563rem;
+  --ds-text-h2: 1.953rem;
+  --ds-text-h1: 2.746rem;
+  --ds-leading-body: 1.6;
+  --ds-leading-heading: 1.25;
+  --ds-measure-prose: 68ch;
+
+  /* spacing */
+  --ds-space-_note: Web spacing scale (rem). Print spacing lives in type.print.;
+  --ds-space-1: 0.25rem;
+  --ds-space-2: 0.5rem;
+  --ds-space-3: 1rem;
+  --ds-space-4: 1.5rem;
+  --ds-space-5: 2rem;
+  --ds-space-6: 3rem;
+
+  /* layout */
+  --ds-bp-md: 48rem;
+  --ds-bp-lg: 72rem;
+  --ds-container-prose: 46rem;
+  --ds-container-wide: 72rem;
+  --ds-radius-sm: 0.25rem;
+  --ds-radius-md: 0.5rem;
+  --ds-touch-min: 2.75rem;
+
+  /* motion */
+  --ds-dur-fast: 120ms;
+  --ds-dur-normal: 200ms;
+  --ds-dur-slow: 300ms;
+  --ds-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Dark scheme: system preference, unless user explicitly chose light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  --ds-color-brand-title: #D4AF37;
+  --ds-color-section-title: #EB6E56;
+  --ds-color-link: #D0826A;
+  --ds-color-error: #EB6E56;
+  --ds-color-success: #63B08C;
+  --ds-color-warning: #E2A76F;
+  --ds-color-highlight-border: #E2A76F;
+  --ds-color-surface-base: #1A1C20;
+  --ds-color-surface-raised: #24272D;
+  --ds-color-text-primary: #DFE2DA;
+  }
+}
+
+/* Dark scheme: explicit user choice (set by theme toggle, SPEC.md §7). */
+:root[data-theme="dark"] {
+  --ds-color-brand-title: #D4AF37;
+  --ds-color-section-title: #EB6E56;
+  --ds-color-link: #D0826A;
+  --ds-color-error: #EB6E56;
+  --ds-color-success: #63B08C;
+  --ds-color-warning: #E2A76F;
+  --ds-color-highlight-border: #E2A76F;
+  --ds-color-surface-base: #1A1C20;
+  --ds-color-surface-raised: #24272D;
+  --ds-color-text-primary: #DFE2DA;
+}
