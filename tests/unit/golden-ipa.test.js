@@ -1,7 +1,7 @@
 /**
  * Golden IPA acceptance (PRD §9 G2P row): Aeneid I.1–7 against the frozen
- * gold samples (G2P.md §10.2 / kalli/gold-corpus/aeneid-1-1-7.ipa-gold.md,
- * frozen 2026-08-16; machine-readable mirror in
+ * gold samples (G2P rule table §10.2, frozen 2026-08-16; machine-readable
+ * mirror in
  * tests/golden/aeneid-1-1-7.ipa-gold.json).
  *
  * The engine must reproduce the rule-canonical rendering (expected_ipa)

@@ -1,7 +1,7 @@
 /**
  * core/latin-g2p.js — Classical Latin G2P engine (Porphyrii R-F8 / PRD §6.2)
  *
- * Rule spec: kalli/G2P.md v1.0.3 (2026-08-17 fix round: D1–D9 adjudications
+ * Rule spec: the lab's frozen G2P rule table, v1.0.3 (2026-08-17 fix round
  * on top of the v1.0.2 freeze). This module is the mechanical translation of
  * that frozen rule table — it implements rules, it does not invent them.
  * Pure functions: no DOM, no network, no side effects.

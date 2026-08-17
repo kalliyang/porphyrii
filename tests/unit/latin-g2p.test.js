@@ -1,8 +1,7 @@
 /**
  * Unit tests for core/latin-g2p.js — one test per mechanism of the frozen
- * rule table (kalli/G2P.md v1.0.2). Expected values derive from the rule
- * table's own examples (§2.3, §3, §10) and the frozen exception-word list
- * (kalli/gold-corpus/exceptions-candidates.md).
+ * rule table (v1.0.2 freeze). Expected values derive from the rule
+ * table's own examples (§2.3, §3, §10) and the frozen exception-word list.
  *
  * Run: node --test tests/unit/
  */
