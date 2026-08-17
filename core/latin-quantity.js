@@ -15,6 +15,7 @@
  */
 
 import { analyzeLatin } from "./latin-g2p.js";
+import { contractSyllableOverrides } from "./syllable-overrides.js";
 
 // ============================================================================
 // §1 Weight-sequence derivation (shared syllabification, second exit)
@@ -236,8 +237,20 @@ function validateLine(derivedLine, solverLine) {
  * Validate an analyze-response contract object (PRD §7.2) for self-consistency
  * between the solver's scansion and its own macrons.
  *
+ * F-08 transport (2026-08-17): unless the caller passes explicit
+ * options.overrides, the solver's syllable regroupings (synizesis, G2P.md
+ * §7-3) are derived from the contract's own scansion[] strings via
+ * core/syllable-overrides.js and applied to the derivation — the contract
+ * needs no out-of-band override channel.
+ *
+ * F-11 (2026-08-17): lines align by ARRAY ORDER over the filtered non-empty
+ * derived lines (matching the Worker's cross-check semantics), never by
+ * re-indexing physical text lines via the line metadata. Fail closed:
+ * solverLine.line must equal its 1-based array position.
+ *
  * @param {object} contract — { scansion_text, scansion, meter }
- * @param {object} [options] — passed to analyzeLatin (overrides)
+ * @param {object} [options] — passed to analyzeLatin (explicit overrides
+ *   bypass the transport)
  * @returns {{ ok:boolean, meter:string, prose:boolean,
  *   lines: Array<object>, mismatchCount:number }}
  */
@@ -247,9 +260,39 @@ export function validateScansion(contract, options = {}) {
   if (meter === "prose") {
     return { ok: true, meter, prose: true, lines: [], mismatchCount: 0 };
   }
-  const derived = deriveWeights(text, options);
-  const lines = (contract.scansion ?? []).map((solverLine) => {
-    const derivedLine = derived[solverLine.line - 1];
+  // Explicit caller overrides bypass the transport entirely — its problems
+  // must not block lines the caller takes responsibility for.
+  const useTransport = options.overrides == null;
+  const transport = useTransport
+    ? contractSyllableOverrides(contract)
+    : { overrides: [], problems: [] };
+  const effectiveOptions = useTransport
+    ? { ...options, overrides: transport.overrides }
+    : options;
+  const problemByLine = new Map(
+    transport.problems.map((p) => [p.line, p.message])
+  );
+  const derived = deriveWeights(text, effectiveOptions).filter(
+    (l) => l.syllables.length > 0
+  );
+  const lines = (contract.scansion ?? []).map((solverLine, idx) => {
+    if (solverLine.line !== idx + 1) {
+      return {
+        line: solverLine.line,
+        ok: false,
+        mismatches: [],
+        note: `fail-closed: solver line field ${solverLine.line} ≠ array position ${idx + 1}`,
+      };
+    }
+    if (problemByLine.has(idx + 1)) {
+      return {
+        line: solverLine.line,
+        ok: false,
+        mismatches: [],
+        note: `override transport: ${problemByLine.get(idx + 1)}`,
+      };
+    }
+    const derivedLine = derived[idx];
     if (!derivedLine) {
       return {
         line: solverLine.line,

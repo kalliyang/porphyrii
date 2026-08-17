@@ -217,9 +217,63 @@ test("validateScansion: final-syllable grace (anceps) accepts either value", () 
 test("validateScansion: syllable-count divergence reported as structural note", () => {
   const v = structuredClone(AEN11_CONTRACT);
   v.scansion[0].feet[0] = v.scansion[0].feet[0].slice(0, 2); // drop a syllable
-  const r = validateScansion(v);
+  // explicit (empty) overrides bypass the F-08 transport so the raw count
+  // path is exercised (with the transport, a silently dropped syllable is
+  // caught earlier as a letter-reconstruction problem)
+  const r = validateScansion(v, { overrides: [] });
   assert.equal(r.ok, false);
   assert.deepEqual(r.lines[0].countMismatch, { solver: 14, derived: 15 });
+});
+
+test("validateScansion: blank physical lines do not misalign entries (F-11)", () => {
+  const mk = (lineNo) => ({
+    line: lineNo,
+    text: "māla",
+    feet: [
+      [
+        { s: "mā", q: "long", elided: false },
+        { s: "la", q: "short", elided: false },
+      ],
+    ],
+  });
+  const r = validateScansion({
+    scansion_text: "māla\n\nmāla",
+    meter: "unknown",
+    scansion: [mk(1), mk(2)],
+  });
+  // entry 2 must validate against the SECOND non-empty line (māla), not
+  // the blank physical line
+  assert.equal(r.ok, true);
+  assert.equal(r.lines.length, 2);
+  assert.equal(r.lines[1].note, undefined);
+});
+
+test("validateScansion: line field must equal array position (fail-closed, F-11)", () => {
+  const mk = (lineNo) => ({
+    line: lineNo,
+    text: "māla",
+    feet: [
+      [
+        { s: "mā", q: "long", elided: false },
+        { s: "la", q: "short", elided: false },
+      ],
+    ],
+  });
+  const r = validateScansion({
+    scansion_text: "māla\n\nmāla",
+    meter: "unknown",
+    scansion: [mk(1), mk(1)], // duplicate line number: entry 2 claims line 1
+  });
+  assert.equal(r.ok, false);
+  assert.match(r.lines[1].note, /fail-closed/);
+  // and a wrong 1-based field on the first entry is caught the same way
+  const r2 = validateScansion({
+    scansion_text: "māla\n\nmāla",
+    meter: "unknown",
+    scansion: [mk(7), mk(2)],
+  });
+  assert.equal(r2.ok, false);
+  assert.match(r2.lines[0].note, /fail-closed/);
 });
 
 test("validateScansion: prose is skipped by design", () => {
