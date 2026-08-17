@@ -27,6 +27,9 @@ const BASE = process.argv[2] ?? "https://porphyrii.org/";
 const contract = JSON.parse(
   fs.readFileSync(path.join(HERE, "mock-contract.json"), "utf8")
 );
+const elisionContract = JSON.parse(
+  fs.readFileSync(path.join(HERE, "mock-elision.json"), "utf8")
+);
 const gold = JSON.parse(
   fs.readFileSync(
     path.join(HERE, "..", "golden", "aeneid-1-1-7.ipa-gold.json"),
@@ -51,7 +54,7 @@ cCorrected.spelling_corrected = true;
 cCorrected.correction_reason = "Read “Lauinaque” as a misspelling of “Laviniaque”.";
 cCorrected.scansion_text = cCorrected.scansion_text.replace("Lāvīniaque", "Lāvīnaque");
 
-const variants = { happy: contract, flip: cFlip, alter: cAltered, corrected: cCorrected };
+const variants = { happy: contract, flip: cFlip, alter: cAltered, corrected: cCorrected, elision: elisionContract };
 let mode = "happy";
 const out = { checks: {} };
 
@@ -193,6 +196,27 @@ const out = { checks: {} };
   c.correctedAlertClass = await page.locator("#result-alerts .alert").first().getAttribute("class");
   c.correctedNoErrorAlert = (await page.locator("#result-alerts .alert-error").count()) === 0;
   await page.screenshot({ path: shots("16-mock-corrected.png"), fullPage: true });
+
+  // ---- elision regression (F-W6-1, W7): Aen. 1.3 double elision + liaison.
+  // The repaired transport must produce NO validator warnings, and the
+  // in-browser IPA must equal the golden corpus line 3 character-for-character.
+  mode = "elision";
+  await page.reload({ waitUntil: "load" });
+  await page.waitForTimeout(800);
+  await stubTurnstile();
+  await page.fill("#input-text", elisionContract.original_text_cleaned);
+  await page.click("#analyze-btn");
+  await page.waitForSelector("#result-section:not([hidden])", { timeout: 30000 });
+  await page.waitForTimeout(400);
+  c.elisionValidatorWarnings = ((await page.textContent("#validator-warnings")) || "").trim() || null;
+  c.elisionLineNotes = await page.locator("#scansion-body .line-note").allTextContents();
+  c.elisionElidedRendered = await page.locator("#scansion-body .syl.elided").count();
+  await page.check("#ipa-toggle");
+  await page.waitForTimeout(400);
+  c.elisionIpa = (await page.locator("#ipa-body .ipa-line").first().textContent()) || null;
+  c.elisionIpaIsGold = c.elisionIpa === gold.lines[2].expected_ipa;
+  c.elisionIpaFallbackNote = (await page.locator("#ipa-body .line-note").count()) > 0;
+  await page.screenshot({ path: shots("17-mock-elision.png"), fullPage: true });
 
   console.log(JSON.stringify(out, null, 2));
   await browser.close();

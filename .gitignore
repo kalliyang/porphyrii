@@ -15,4 +15,5 @@ node_modules/
 
 # E2E harness artifacts (tests/e2e/README.md)
 tests/e2e/mock-contract.json
+tests/e2e/mock-elision.json
 tests/e2e/shots/
