@@ -116,6 +116,13 @@ a:hover {
   inset-block-start: var(--ds-space-2);
 }
 
+/* The hidden attribute must always win over component display rules
+   (.btn sets display:inline-flex, which would otherwise override the
+   UA stylesheet's [hidden] display:none). */
+[hidden] {
+  display: none !important;
+}
+
 /* ---------- focus (SPEC §6.2) ---------- */
 :focus-visible {
   outline: 2px solid var(--ds-color-link);
