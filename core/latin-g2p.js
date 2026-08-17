@@ -1,9 +1,10 @@
 /**
  * core/latin-g2p.js — Classical Latin G2P engine (Porphyrii R-F8 / PRD §6.2)
  *
- * Rule spec: kalli/G2P.md v1.0.2 (frozen 2026-08-16). This module is the
- * mechanical translation of that frozen rule table — it implements rules, it
- * does not invent them. Pure functions: no DOM, no network, no side effects.
+ * Rule spec: kalli/G2P.md v1.0.3 (2026-08-17 fix round: D1–D9 adjudications
+ * on top of the v1.0.2 freeze). This module is the mechanical translation of
+ * that frozen rule table — it implements rules, it does not invent them.
+ * Pure functions: no DOM, no network, no side effects.
  *
  * Input:  macronized Latin text with the elision parenthesis convention
  *         ("mult(um) ill(e) et"); NFC-normalized internally.
@@ -32,10 +33,9 @@ const BARE_FORM = {
 };
 
 // G2P.md §2.1 — short/long quality pairs (J9: lax shorts; a has no quality
-// contrast). NOTE: §2.1 lists short y as [ʏ], but the frozen mapping table
-// la.json v0.1.0 has no ʏ row (its short-y row is "y"). The driver contract
-// (hard UnmappableSymbolError) wins: short y is emitted as "y". Reported as
-// a doc-level erratum candidate; no corpus impact (no y in the gold corpus).
+// contrast). D8 (v1.0.3): §2.1 short y corrected to [y] — la.json v0.1.0 has
+// no ʏ row and the driver's hard UnmappableSymbolError contract wins; [ʏ]
+// remains the target notation for a future mapping extension.
 const VOWEL_IPA = {
   a: { long: "aː", short: "a" },
   e: { long: "eː", short: "ɛ" },
@@ -74,10 +74,17 @@ const MUTE_LETTERS = new Set(["p", "b", "t", "d", "c", "g"]);
 
 // §3-6 / J14 su- stem table ([sw]; u is not a nucleus). Macron-SENSITIVE:
 // the stems carry ā/ē, which is what keeps the suus family (sua-, short a)
-// out — see G2P.md §3-6 "必须词干级判定".
-// (prefix variants carry surface macrons: cōn- in cōnsuēscō is long by
-// hidden quantity before ns; īn- likewise)
-const SU_STEM_RE = /^(?:ad|as|con|cōn|dē|de|dis|per|re|sub|in|īn|inter)?(?:mān)?(suād|suāv|suēs|suēt|suēb|suēv)/;
+// out — see G2P.md §3-6 "必须词干级判定". F-03 (2026-08-17): the surfaces
+// are complete (suās- allomorph: suāsōrius ← suādeō; mān- compound stems),
+// and prefix stripping reuses the single §3-4 PREFIXES table (longest
+// match) instead of a second, incomplete prefix regex.
+const SU_STEMS = [
+  "mānsuēs", "mānsuēt",
+  "suād", "suās", "suāv", "suēs", "suēt", "suēb", "suēv",
+];
+// Assimilated prefix surfaces that precede su- stems but are not literal
+// §3-4 entries (ad- → as- in assuēscō/assuētus).
+const SU_PREFIX_SURFACES = ["as"];
 
 // §2.2 — ei/eu diphthong word lists (rare diphthongs; everywhere else the
 // two vowels are hiatus). Matched macronless, enclitic suffix stripped.
@@ -154,9 +161,16 @@ function tokenizeLine(lineText) {
   let depth = 0;
   let parenBuf = "";
   const flush = (hard) => {
-    if (cur) tokens.push(cur);
-    if (cur) cur.hardAfter = hard;
-    cur = null;
+    if (cur) {
+      cur.hardAfter = hard;
+      tokens.push(cur);
+      cur = null;
+    } else if (hard && tokens.length > 0) {
+      // F-06 (2026-08-17): punctuation after whitespace — the token was
+      // already flushed by the space, but the hard boundary still belongs
+      // to the most recent word (§3-10: "prīmus , ab" ≡ "prīmus, ab").
+      tokens[tokens.length - 1].hardAfter = true;
+    }
   };
   for (const ch of lineText.normalize("NFC")) {
     if (ch === "(") {
@@ -197,14 +211,16 @@ function tokenizeLine(lineText) {
 }
 
 /**
- * Parsed letter: { ch, bare, long } — ch is the NFC lowercase surface form,
- * bare strips macron/breve, long marks a macron (breve = explicit short).
+ * Parsed letter: { ch, bare, long, marked } — ch is the NFC lowercase surface
+ * form, bare strips macron/breve, long marks a macron, marked marks ANY
+ * explicit quantity sign (macron or breve — D5 precedence, §2.2).
  */
 function parseLetters(pronounced) {
   return [...pronounced.toLowerCase().normalize("NFC")].map((ch) => ({
     ch,
     bare: bareForm(ch),
     long: LONG_VOWELS.has(ch),
+    marked: LONG_VOWELS.has(ch) || BREVE_VOWELS.has(ch),
   }));
 }
 
@@ -212,52 +228,75 @@ function parseLetters(pronounced) {
 // §4 Word phonology: letters → phoneme stream
 // ============================================================================
 
-// Liquid-final prefixes (per-, inter-, super-) do not fire the vowel-initial
-// condition: the frozen gold itself requires su.pe.rum (§10.2 L4 superum,
-// light pe), which the literal §3-4 condition would force to su.per.um.
-// Their r links by ordinary onset maximization. These three can never meet
-// the mute+liquid condition anyway (r is not a mute), so excluding them here
-// means they never force a boundary. Narrowing reported for adjudication.
-const LIQUID_FINAL_PREFIXES = new Set(["per", "inter", "super"]);
-
 /**
  * §3-4 / J14 — forced compound boundary. Returns the letter index at which
- * the root starts, or null. Fires only when the boundary changes the default
- * result: root vowel-initial (h-transparent, §3-7) or prefix-final mute +
- * root-initial liquid.
+ * the root starts, or null. D1 (2026-08-17, v1.0.3): the vowel-initial root
+ * trigger is REMOVED — the only two corpus witnesses (adīre Aen.1.10,
+ * adēmpte Cat.101.6) both scan against a forced boundary and the metre
+ * admits only the light reading; solver structural splits can still force a
+ * boundary via overrides (§7-3 trust model unchanged). What remains is the
+ * mute+liquid branch: prefix-final mute + root-initial liquid (ab-rumpō,
+ * ad-lātus). The undocumented root.length < 2 threshold (F-07) is gone with
+ * the branch that used it.
  */
 function detectPrefixBoundary(letters) {
   const bare = letters.map((l) => l.bare).join("");
   for (const prefix of PREFIXES) {
     if (!bare.startsWith(prefix)) continue;
     const root = letters.slice(prefix.length);
-    if (root.length < 2) continue;
     if (!root.some((l) => isVowelLetter(l.bare))) continue;
     let firstIdx = 0;
     while (firstIdx < root.length && root[firstIdx].bare === "h") firstIdx++;
-    const rootStartsVowel =
-      firstIdx < root.length && isVowelLetter(root[firstIdx].bare);
     const rootStartsLiquid =
       firstIdx < root.length &&
       (root[firstIdx].bare === "r" || root[firstIdx].bare === "l");
     const prefixFinalMute = MUTE_LETTERS.has(prefix[prefix.length - 1]);
-    if (rootStartsVowel && !LIQUID_FINAL_PREFIXES.has(prefix)) {
-      return prefix.length;
-    }
     if (prefixFinalMute && rootStartsLiquid) return prefix.length;
   }
   return null;
 }
 
 /**
+ * Any §3-4 prefix at the word start (longest match), regardless of the
+ * root's initial. D1 removed the forced syllable BOUNDARY for vowel-initial
+ * roots, but prefix detection also feeds the consonantal-i rule: a
+ * root-initial short i + vowel after a prefix is [j] (in-iūria → in.jū.ri.a,
+ * Aen.1.27 — the iūs family has consonantal i at the root start). That
+ * phoneme-level fact is independent of where syllable boundaries fall.
+ */
+function detectPrefixEnd(letters) {
+  const bare = letters.map((l) => l.bare).join("");
+  let best = null;
+  for (const prefix of PREFIXES) {
+    if (!bare.startsWith(prefix)) continue;
+    const root = letters.slice(prefix.length);
+    if (!root.some((l) => isVowelLetter(l.bare))) continue;
+    if (best === null || prefix.length > best) best = prefix.length;
+  }
+  return best;
+}
+
+/**
  * §3-6 / J14 — su- stem table ([sw]). Returns the letter index of the "u"
- * that becomes consonantal w, or -1. Macron-sensitive stems keep suus out.
+ * that becomes consonantal w, or -1. F-03: strip a known prefix using the
+ * §3-4 table (longest match, macron-insensitive), then match the complete
+ * macron-sensitive stem surfaces (stem-level matching keeps suus out).
  */
 function detectSuStem(pronouncedMacronized) {
-  const m = SU_STEM_RE.exec(pronouncedMacronized);
-  if (!m) return -1;
-  const stemStart = m[0].length - m[1].length;
-  return stemStart + 1; // index of the "u" inside "su…"
+  const word = pronouncedMacronized; // already lowercase NFC
+  const bare = [...word].map(bareForm).join("");
+  let stripLen = 0;
+  for (const p of [...PREFIXES, ...SU_PREFIX_SURFACES]) {
+    if (p.length > stripLen && bare.startsWith(p)) stripLen = p.length;
+  }
+  const rest = word.slice(stripLen);
+  for (const stem of SU_STEMS) {
+    if (rest.startsWith(stem)) {
+      // index of the "u" inside the stem's "su…" core (mān- stems offset)
+      return stripLen + stem.indexOf("su") + 1;
+    }
+  }
+  return -1;
 }
 
 function stripEncliticSuffix(key) {
@@ -283,6 +322,7 @@ function makePhoneme(ipa, kind, letterStart, letterEnd, letterText, extra = {}) 
   return {
     ipa, kind, letterStart, letterEnd, letterText,
     long: false, transparent: false, gem: null, gemStyle: null,
+    compound: false, offglide: false, suGlide: false,
     ...extra,
   };
 }
@@ -291,7 +331,8 @@ function makePhoneme(ipa, kind, letterStart, letterEnd, letterText, extra = {}) 
  * Letters → phoneme stream. Orthography rules of G2P.md §2.3 applied in scan
  * order; diphthongs (§2.2) before single vowels; consonantal i/u by position.
  * ctx: {
- *   prefixBoundary: letter index | null,
+ *   prefixBoundary: letter index | null,  // forced split (§3-4 ml branch)
+ *   prefixEnd: letter index | null,       // any §3-4 prefix; j-rule only
  *   suWLetter: letter index | -1,
  *   uiMonosyllable: bool, euWord: bool, eiWord: bool,
  * }
@@ -308,10 +349,15 @@ function lettersToPhonemes(letters, ctx) {
     const L = letters[i];
     const b = L.bare;
 
-    // J5: cui/huic — ui as ʊ + j, one syllable.
+    // J5: cui/huic — ui as ʊ + j, one syllable. F-04 (2026-08-17): [ʊj] is
+    // an indivisible, natural-heavy COMPOUND NUCLEUS. The off-glide renders
+    // as its own phoneme (la.json has no uI row) but is not a coda
+    // consonant: liaison must never move it ("cui erat" keeps cui heavy).
     if (ctx.uiMonosyllable && b === "u" && bareAt(i + 1) === "i") {
-      out.push(makePhoneme("ʊ", "v", i, i + 1, L.ch));
-      out.push(makePhoneme("j", "c", i + 1, i + 1, letters[i + 1].ch));
+      out.push(makePhoneme("ʊ", "v", i, i + 1, L.ch, { compound: true }));
+      out.push(
+        makePhoneme("j", "c", i + 1, i + 1, letters[i + 1].ch, { offglide: true })
+      );
       i += 2;
       continue;
     }
@@ -324,9 +370,15 @@ function lettersToPhonemes(letters, ctx) {
         // §2.2: ae/au/oe by default (a §3-4 prefix boundary breaks the join);
         // ei/eu only in their word lists — the list is explicit and wins over
         // a prefix boundary (deinde = dē+inde etymologically, still dɛɪ̯n.dɛ).
+        // D5 (2026-08-17, v1.0.3): the default merge applies only when BOTH
+        // letters are unmarked — an explicit macron/breve on either letter
+        // outranks the default (J13 corollary) and the two vowels read as
+        // separate nuclei: poēta → po.ē.ta.
         const always =
           (pair === "ae" || pair === "au" || pair === "oe") &&
-          !boundaryBetween(i, i + 1);
+          !boundaryBetween(i, i + 1) &&
+          !L.marked &&
+          !letters[i + 1].marked;
         const listed =
           (pair === "eu" && ctx.euWord) || (pair === "ei" && ctx.eiWord);
         if (always || listed) {
@@ -356,15 +408,17 @@ function lettersToPhonemes(letters, ctx) {
           i += 1;
           continue;
         }
-        if (i === 0 || i === ctx.prefixBoundary) {
+        if (i === 0 || i === ctx.prefixEnd) {
           out.push(makePhoneme("j", "c", i, i, L.ch));
           i += 1;
           continue;
         }
       }
-      // §3-6 su- stem: the marked u becomes [w].
+      // §3-6 su- stem: the marked u becomes [w]. suGlide marks it so
+      // syllabification keeps s+w together as the stem onset (F-03:
+      // prō-suādeō → prō.swaː..., never *prōs.waː...).
       if (b === "u" && i === ctx.suWLetter) {
-        out.push(makePhoneme("w", "c", i, i, L.ch));
+        out.push(makePhoneme("w", "c", i, i, L.ch, { suGlide: true }));
         i += 1;
         continue;
       }
@@ -478,11 +532,22 @@ function lettersToPhonemes(letters, ctx) {
  * bug and must surface loudly.
  */
 function parseOverrideSplit(split, wordLetters, ctx) {
-  const parts = split.toLowerCase().normalize("NFC").split("-").filter(Boolean);
+  // F-09 (2026-08-17): empty segments (stray/doubled/leading/trailing
+  // hyphens) are malformed input and must throw, not be silently filtered.
+  const parts = split.toLowerCase().normalize("NFC").split("-");
+  if (parts.some((p) => p.length === 0)) {
+    throw new Error(
+      `G2P override malformed split "${split}": empty segment (stray hyphen)`
+    );
+  }
   const splitLetterStr = parts.join("");
-  const normalizedSplit = splitLetterStr
-    .replaceAll("j", "i").replaceAll("w", "v");
-  const normalizedWord = wordLetters.map((l) => l.ch).join("");
+  // Unified orthographic normalization on BOTH sides (F-09): j→i and
+  // w/v→u, matching the R-F6 normalization family — the solver may spell
+  // consonantal i/u as j/w and vocalic v as either v or u.
+  const norm = (s) =>
+    s.replaceAll("j", "i").replaceAll("w", "v").replaceAll("v", "u");
+  const normalizedSplit = norm(splitLetterStr);
+  const normalizedWord = norm(wordLetters.map((l) => l.ch).join(""));
   if (normalizedSplit !== normalizedWord) {
     throw new Error(
       `G2P override mismatch: split "${split}" does not reconstruct the word letters`
@@ -492,10 +557,15 @@ function parseOverrideSplit(split, wordLetters, ctx) {
     ch,
     bare: bareForm(ch),
     long: LONG_VOWELS.has(ch),
+    marked: LONG_VOWELS.has(ch) || BREVE_VOWELS.has(ch),
   }));
   const phonemes = lettersToPhonemes(splitLetters, {
     prefixBoundary: null,
-    suWLetter: -1,
+    prefixEnd: null, // the split string spells consonantal i explicitly (j)
+    // F-03: an override covers syllable BOUNDARIES only — it must not
+    // disable the §3-6 [sw] phoneme mapping (suWLetter indexes the same
+    // letter positions; the reconstruction check above guarantees 1:1).
+    suWLetter: ctx.suWLetter,
     uiMonosyllable: ctx.uiMonosyllable,
     euWord: ctx.euWord,
     eiWord: ctx.eiWord,
@@ -519,6 +589,18 @@ function parseOverrideSplit(split, wordLetters, ctx) {
 }
 
 /**
+ * F-12 (2026-08-17): the ONLY consonants that may render in the canonical
+ * Cː form — the single source of truth shared by the renderer and
+ * IPA_INVENTORY.geminates (la.json v0.1.0 has exactly these rows). Identical
+ * adjacent consonants outside this set (w, kʷ, ɡʷ, pʰ/tʰ/kʰ, z, h...) never
+ * pair: they render as two separate phonemes, which la.json maps
+ * individually — unmappable gemination is never generated.
+ */
+const LENGTHENABLE_CONSONANTS = new Set([
+  "p", "t", "k", "b", "d", "ɡ", "m", "n", "f", "s", "l", "r",
+]);
+
+/**
  * Geminate pairing (§2.3): two adjacent identical consonant phonemes form a
  * pair. Style "length" renders Cː on the first half and suppresses the
  * second (la.json has no jː row, so jj renders doubled — J8).
@@ -531,7 +613,9 @@ function markGeminates(phonemes) {
     if (a.transparent || b.transparent) continue;
     if (a.ipa !== b.ipa) continue;
     if (a.gem || b.gem) continue;
-    const style = a.ipa === "j" ? "doubled" : "length";
+    const style =
+      a.ipa === "j" ? "doubled" : LENGTHENABLE_CONSONANTS.has(a.ipa) ? "length" : null;
+    if (style === null) continue; // F-12: never emit an unmappable Cː
     a.gem = "first";
     b.gem = "second";
     a.gemStyle = style;
@@ -593,7 +677,9 @@ function syllabifyWord(phonemes, forced) {
     } else {
       const first = slots[0];
       const second = slots[1];
-      if (
+      if (slots.length === 2 && phonemes[second].suGlide) {
+        splitAt = first; // §3-6: s + consonantal u is one stem onset [sw]
+      } else if (
         slots.length === 2 &&
         MUTES.has(phonemes[first].ipa) &&
         LIQUIDS.has(phonemes[second].ipa)
@@ -650,7 +736,11 @@ function applyLiaison(words) {
     if (onsetSlots.length > 0) continue; // consonant-initial
 
     const lastSyl = w1.syllables[w1.syllables.length - 1];
-    const codaSlots = lastSyl.coda.filter((ph) => !ph.transparent);
+    // F-04: an off-glide (cui/huic [ʊj]) is nucleus material — liaison
+    // never moves it ("cui erat" keeps [kʊj], not *[kʊ.ˈjɛ...]).
+    const codaSlots = lastSyl.coda.filter(
+      (ph) => !ph.transparent && !ph.offglide
+    );
 
     if (codaSlots.length === 1) {
       const moved = codaSlots[0];
@@ -706,19 +796,31 @@ function computeWeights(words) {
   });
   for (let k = 0; k < flat.length; k++) {
     const { syl } = flat[k];
-    const natural = syl.nucleus.kind === "d" || syl.nucleus.long;
-    const closed = syl.coda.filter((ph) => !ph.transparent).length > 0;
+    // F-04: a compound nucleus (cui/huic [ʊj]) is natural-heavy like a
+    // diphthong (§4-1). An off-glide is nucleus material, not a coda
+    // consonant, so it neither closes the syllable nor moves in liaison.
+    const natural =
+      syl.nucleus.kind === "d" || syl.nucleus.long || syl.nucleus.compound;
+    const closed =
+      syl.coda.filter((ph) => !ph.transparent && !ph.offglide).length > 0;
     let crossPosition = false;
     let indeterminate = null;
     if (!closed && k + 1 < flat.length) {
       const next = flat[k + 1];
       const nextSlots = next.syl.onset.filter((ph) => !ph.transparent);
       if (nextSlots.length >= 2) {
-        const isML =
-          MUTES.has(nextSlots[0].ipa) && LIQUIDS.has(nextSlots[1].ipa);
+        const crossWord = next.wi !== flat[k].wi;
+        // D2 (2026-08-17, v1.0.3 §4-2): cross-word f + r/l joins the
+        // mute+liquid grace (Cat.101.9 accĭpĕ frā- / mānantiă flē- scan
+        // light in Pedecerto and the frozen corpus's own note agrees).
+        // Word-internal f is NOT added to the §3-3 mute set — no
+        // word-internal evidence.
+        const muteLike =
+          MUTES.has(nextSlots[0].ipa) || (crossWord && nextSlots[0].ipa === "f");
+        const isML = muteLike && LIQUIDS.has(nextSlots[1].ipa);
         if (isML) {
           indeterminate = "ml";
-          crossPosition = next.wi !== flat[k].wi; // cross-word ml: heavy default
+          crossPosition = crossWord; // cross-word ml: heavy default
         } else {
           crossPosition = true;
         }
@@ -766,14 +868,19 @@ function assignStress(word) {
     }
   }
 
-  // §5-4 enclitic override: stress the syllable before -que/-ve/-ne,
-  // whatever its weight. -ne is lexically ambiguous (nūmen family: nū-mi-ne
-  // is not an enclitic construction) — excluded by the -min(e/a) guard; see
-  // implementation report. If the enclitic vowel was elided (atqu(e)) the
-  // rule cannot apply and we fall through to the default rules.
+  // §5-4 enclitic override: stress the syllable before -que/-ve, whatever
+  // its weight. D4 (2026-08-17, v1.0.3): -ne is NO LONGER auto-enclitic —
+  // ordinary -ne endings (orīgine / imāgine / magnitūdine type) made the
+  // automatic reading a systematic false positive, and the false-negative
+  // direction (ordinary treatment of a true enclitic -ne) is safer. The
+  // /min[ae]$/ blacklist is gone with the branch. Automatic enclitic -ne
+  // recognition is a documented v1 known limitation (vidēsne-type readings
+  // are unaffected — the heavy penult takes the stress either way); true
+  // enclitic -ne stress awaits explicit solver marking. If the enclitic
+  // vowel was elided (atqu(e)) the rule cannot apply and we fall through to
+  // the default rules.
   if (word.elided.length === 0 && syls.length >= 2) {
-    const isNe = key.endsWith("ne") && !/min[ae]$/.test(key);
-    const isEnclitic = key.endsWith("que") || key.endsWith("ve") || isNe;
+    const isEnclitic = key.endsWith("que") || key.endsWith("ve");
     if (isEnclitic && !STRESS_FIRST_WORDS.has(key)) {
       syls[syls.length - 2].stressed = true;
       return;
@@ -841,6 +948,12 @@ function renderSyllableOrtho(syl) {
  * Render one analyzed line: the IPA string (driver-ready, no brackets) and
  * the flat syllable structure. Elided syllables are appended at their word's
  * end with elided: true — excluded from IPA and weights (R-F8 default).
+ *
+ * F-10 caveat (2026-08-17): `word`/`ortho` are DISPLAY-LEVEL attribution —
+ * a liaison syllable mixes letters of two words (prī-mu-sa: "sa" holds the
+ * final -s of prīmus and the a- of ab) but carries a single word index and
+ * no source spans. This is sufficient for the v1 two-line UI; it is NOT a
+ * source-accurate alignment layer (per-word highlighting is out of v1).
  */
 function renderLine(lineIndex, surface, words) {
   const syllables = [];
@@ -908,6 +1021,7 @@ function analyzeWord(token, overrideSplit) {
   const encliticStripped = stripEncliticSuffix(key);
   const ctx = {
     prefixBoundary: overrideSplit ? null : detectPrefixBoundary(letters),
+    prefixEnd: overrideSplit ? null : detectPrefixEnd(letters),
     suWLetter: detectSuStem(pronouncedMacronized),
     uiMonosyllable: UI_MONOSYLLABLE_WORDS.has(key),
     euWord: EU_DIPHTHONG_WORDS.has(encliticStripped),
@@ -959,11 +1073,16 @@ function analyzeWord(token, overrideSplit) {
  *
  * @param {string} text — macronized Latin, elision parenthesis convention.
  * @param {object} [options]
- * @param {Array<{line:number, word:(number|string), split:string}>} [options.overrides]
+ * @param {Array<{line:number, word:number, split:string}>} [options.overrides]
  *   Solver-provided syllabifications (synizesis & co., G2P.md §7-3). `line`
- *   is 0-based; `word` is the 0-based word index in the line or the word's
- *   surface form (first match in that line). `split` is hyphenated phonetic
- *   orthography ("lā-vī-nja-que").
+ *   and `word` are 0-based numeric indices (word = word position within the
+ *   line). F-09 (2026-08-17): numeric selectors ONLY — every override must
+ *   resolve and be consumed exactly once; duplicates, string selectors, and
+ *   unmatched selectors all throw. `split` is hyphenated phonetic
+ *   orthography ("lā-vī-nja-que"); v1 supports only lossless i/u→j/w
+ *   contractions (general synizesis needing letter substitution, e.g.
+ *   aurea → au-rja, is a documented v1 limitation — the reconstruction
+ *   check rejects it loudly).
  * @returns {{
  *   ipa: string,
  *   lines: Array<{
@@ -976,20 +1095,35 @@ function analyzeWord(token, overrideSplit) {
  * }}
  */
 export function analyzeLatin(text, options = {}) {
+  // F-09 (2026-08-17): selectors are numeric 0-based indices ONLY. Every
+  // override must resolve and be consumed exactly once — duplicates,
+  // non-numeric selectors, and unmatched selectors all throw (a bad
+  // override is a contract bug and must surface loudly, never silently
+  // apply to the wrong word or to every same-shaped word).
   const overrideMap = new Map();
   for (const o of options.overrides ?? []) {
-    overrideMap.set(`${o.line}:${typeof o.word === "number" ? o.word : o.word.toLowerCase().normalize("NFC")}`, o.split);
+    if (typeof o?.line !== "number" || typeof o?.word !== "number") {
+      throw new Error(
+        "G2P override: line and word selectors must be numeric 0-based indices"
+      );
+    }
+    const k = `${o.line}:${o.word}`;
+    if (overrideMap.has(k)) {
+      throw new Error(`G2P override: duplicate selector ${k}`);
+    }
+    overrideMap.set(k, o.split);
   }
-  const findOverride = (li, wi, surface) =>
-    overrideMap.get(`${li}:${wi}`) ??
-    overrideMap.get(`${li}:${surface.toLowerCase().normalize("NFC")}`);
+  const consumed = new Set();
 
   const lines = text.normalize("NFC").split(/\r?\n/);
   const outLines = lines.map((lineText, li) => {
     const tokens = tokenizeLine(lineText);
-    const words = tokens.map((tok, wi) =>
-      analyzeWord(tok, findOverride(li, wi, tok.surface))
-    );
+    const words = tokens.map((tok, wi) => {
+      const k = `${li}:${wi}`;
+      const split = overrideMap.get(k);
+      if (split !== undefined) consumed.add(k);
+      return analyzeWord(tok, split);
+    });
     applyLiaison(words);
     computeWeights(words);
     for (const word of words) assignStress(word);
@@ -1011,6 +1145,11 @@ export function analyzeLatin(text, options = {}) {
       })),
     };
   });
+  for (const k of overrideMap.keys()) {
+    if (!consumed.has(k)) {
+      throw new Error(`G2P override: selector ${k} did not match any word`);
+    }
+  }
   return {
     ipa: outLines.map((l) => l.ipa).join("\n"),
     lines: outLines,
@@ -1030,7 +1169,7 @@ export const IPA_INVENTORY = {
     "p", "b", "t", "d", "k", "ɡ", "m", "n", "ŋ", "f", "s", "z", "h",
     "w", "j", "l", "r", "kʷ", "ɡʷ", "pʰ", "tʰ", "kʰ",
   ],
-  geminates: [
-    "pː", "tː", "kː", "bː", "dː", "ɡː", "mː", "nː", "fː", "sː", "lː", "rː",
-  ],
+  // F-12: derived from the same lengthenable set the renderer uses — the
+  // inventory can never drift from the renderer's reachable outputs.
+  geminates: [...LENGTHENABLE_CONSONANTS].map((c) => c + "ː"),
 };

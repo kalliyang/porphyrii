@@ -67,6 +67,16 @@ test("geminate consonants render Cː (output spec §6-2)", () => {
   assert.equal(ipa("passus"), "ˈpasː.ʊs"); // gold L5
 });
 
+test("F-12: non-lengthenable consonants never form a Cː geminate", () => {
+  // la.json has no wː/kʷː/pʰː/zː rows — the renderer must emit two
+  // separately mappable phonemes instead (synthetic probe inputs)
+  assert.equal(ipa("avva"), "ˈaw.wa");
+  assert.equal(ipa("aququa"), "ˈakʷ.kʷa");
+  assert.equal(ipa("aphpha"), "ˈapʰ.pʰa");
+  assert.equal(ipa("azzus"), "ˈaz.dzdʊs"); // z → [zd] (J3): zz never pairs
+  assert.equal(ipa("ajja"), "ˈaj.ja"); // jj stays the J8 doubled exception
+});
+
 test("final -m is [m] (J1)", () => {
   assert.equal(ipa("multum"), "ˈmʊl.tʊm");
 });
@@ -107,6 +117,22 @@ test("ui is monosyllabic only in cui/huic (J5)", () => {
   assert.equal(ipa("fruit"), "ˈfrʊ.ɪt"); // two syllables
 });
 
+test("F-04: cui/huic [ʊj] is an indivisible natural-heavy compound nucleus", () => {
+  assert.equal(ipa("cui erat"), "kʊj ˈɛ.rat"); // off-glide never liaisons away
+  const cui = line1("cui erat").syllables[0];
+  assert.equal(cui.ipa, "kʊj");
+  assert.equal(cui.natural, true); // §4-1 diphthong-class weight
+  assert.equal(cui.weight, "heavy");
+  assert.equal(ipa("huic est"), "hʊj.ˈkɛst"); // only the final c may move
+});
+
+test("D5 (v1.0.3): an explicit quantity mark defeats the ae/au/oe merge", () => {
+  assert.equal(ipa("poēta"), "pɔ.ˈeː.ta"); // marked ē is its own nucleus
+  assert.equal(ipa("poeta"), "ˈpoɪ̯.ta"); // unmarked pair: merge unchanged
+  assert.equal(ipa("āurum"), "ˈaː.ʊ.rʊm"); // macron on the first letter
+  assert.equal(ipa("aurum"), "ˈaʊ̯.rʊm");
+});
+
 // ---------------------------------------------------------------------------
 // §3 syllabification
 // ---------------------------------------------------------------------------
@@ -130,10 +156,21 @@ test("mute+liquid goes wholly to the next onset (§3-3, J4)", () => {
 test("compound boundary forces split after prefix (§3-4, J14)", () => {
   assert.equal(ipa("abrumpō"), "ab.ˈrʊm.poː"); // not *a-brumpō
   assert.equal(ipa("adlātus"), "ad.ˈlaː.tʊs");
-  assert.equal(ipa("exeō"), "ˈɛks.ɛ.oː"); // ex keeps ks coda; ĕ lax (J9)
-  assert.equal(ipa("ineō"), "ˈɪn.ɛ.oː");
   const ab = line1("abrumpō").syllables;
   assert.equal(ab[0].weight, "heavy"); // b closes the prefix syllable
+});
+
+test("D1 (v1.0.3): vowel-initial roots no longer force a prefix boundary", () => {
+  // Both corpus witnesses (adīre Aen.1.10, adēmpte Cat.101.6) scan against
+  // the old forced boundary; the metre admits only the light reading.
+  // Solver overrides can still force a boundary explicitly (§7-3).
+  assert.equal(ipa("exeō"), "ˈɛk.sɛ.oː"); // onset maximization now applies
+  assert.equal(ipa("ineō"), "ˈɪ.nɛ.oː");
+  assert.equal(ipa("adīre"), "a.ˈdiː.rɛ"); // Pedecerto-consistent a.dī.re
+  assert.equal(ipa("adī"), "ˈa.diː"); // F-07: no hidden root-length threshold
+  const syls = line1("tot adīre").syllables; // Aen.1.10
+  assert.equal(syls[1].ortho, "ta");
+  assert.equal(syls[1].weight, "light"); // the metre requires light ta
 });
 
 test("su- stem table → [sw]; suus family excluded (§3-6, J14)", () => {
@@ -142,6 +179,26 @@ test("su- stem table → [sw]; suus family excluded (§3-6, J14)", () => {
   assert.equal(ipa("persuādeō"), "pɛr.ˈswaː.dɛ.oː"); // prefix-stripped match
   assert.equal(ipa("cōnsuētūdō"), "koːn.sweː.ˈtuː.doː"); // cōnsuēt- stem
   assert.equal(ipa("suam"), "ˈsʊ.am"); // suus family: two syllables
+});
+
+test("F-03: complete su- surfaces; §3-4 prefix table drives stripping", () => {
+  assert.equal(ipa("suāsōrius"), "swaː.ˈsoː.rɪ.ʊs"); // suās- allomorph
+  assert.equal(ipa("prōsuādeō"), "proː.ˈswaː.dɛ.oː"); // prō- strip; [sw] stays one onset
+  assert.equal(ipa("circumsuādeō"), "kɪr.kʊm.ˈswaː.dɛ.oː"); // longest match
+  assert.equal(ipa("assuēscō"), "asː.ˈweːs.koː"); // ad- assimilated surface as-
+  assert.equal(ipa("mānsuētus"), "maːn.ˈsweː.tʊs"); // mān- compound stem
+});
+
+test("F-03: an override covers boundaries only — [sw] mapping survives", () => {
+  assert.equal(
+    ipa("suādeō", { overrides: [{ line: 0, word: 0, split: "suā-de-ō" }] }),
+    "ˈswaː.dɛ.oː"
+  );
+  // the solver may equally spell the consonantal u as w
+  assert.equal(
+    ipa("suādeō", { overrides: [{ line: 0, word: 0, split: "swā-de-ō" }] }),
+    "ˈswaː.dɛ.oː"
+  );
 });
 
 test("enclitic attaches before syllabification (§3-8)", () => {
@@ -178,6 +235,13 @@ test("punctuation is a hard boundary — no liaison across it (§3-10)", () => {
     ipa("patrēs, atqu(e) altae"),
     "ˈpa.treːs at.ˈkʷal.taɪ̯"
   );
+});
+
+test("F-06: spaced/stray punctuation is still a hard boundary (§3-10)", () => {
+  const expected = "ˈpriː.mʊs a.ˈboː.riːs";
+  assert.equal(ipa("prīmus, ab ōrīs"), expected);
+  assert.equal(ipa("prīmus , ab ōrīs"), expected); // OCR / French spacing
+  assert.equal(ipa("prīmus — ab ōrīs"), expected); // dash after a space
 });
 
 // ---------------------------------------------------------------------------
@@ -226,15 +290,26 @@ test("monosyllables: content words stressed, function words not (J16)", () => {
   assert.equal(ipa("nōn"), "ˈnoːn"); // adverb → content word (cicero note)
 });
 
-test("enclitic -que/-ve/-ne pulls stress to the preceding syllable (§5-4)", () => {
+test("enclitic -que/-ve pulls stress to the preceding syllable (§5-4)", () => {
   assert.equal(ipa("virumque"), "wɪ.ˈrʊm.kʷɛ"); // gold L1
-  assert.equal(ipa("lūmine"), "ˈluː.mɪ.nɛ"); // -men family: NOT enclitic -ne
+});
+
+test("D4 (v1.0.3): ordinary -ne endings take the default stress rules", () => {
+  // the automatic enclitic reading of -ne was a systematic false positive
+  assert.equal(ipa("orīgine"), "ɔ.ˈriː.ɡɪ.nɛ"); // antepenult rī
+  assert.equal(ipa("imāgine"), "ɪ.ˈmaː.ɡɪ.nɛ"); // antepenult mā
+  assert.equal(ipa("magnitūdine"), "maŋ.nɪ.ˈtuː.dɪ.nɛ"); // antepenult tū
+  assert.equal(ipa("lūmine"), "ˈluː.mɪ.nɛ"); // -men family (former blacklist case)
+  // vidēsne-type readings are unaffected: the heavy penult stresses either way
+  assert.equal(ipa("vidēsne"), "wɪ.ˈdeːs.nɛ");
 });
 
 test("§5-5 exceptions: itaque / -ce family / apocopated -ne / faciō compounds", () => {
   assert.equal(ipa("itaque"), "ˈɪ.ta.kʷɛ"); // exceptions doc
   assert.equal(ipa("illīc"), "ɪlː.ˈiːk");
-  assert.equal(ipa("adhūc"), "ad.ˈhuːk");
+  // D1 consequence: ad+hūc no longer forces a boundary (h-transparent
+  // vowel-initial root); the §5-5 final-stress exception still applies
+  assert.equal(ipa("adhūc"), "a.ˈdhuːk");
   assert.equal(ipa("vidēn"), "wɪ.ˈdeːn"); // = vidḗsne (F06, v1.0.2)
   assert.equal(ipa("tantōn"), "tan.ˈtoːn");
   assert.equal(ipa("calefacit"), "ka.lɛ.ˈfa.kɪt"); // -fác- kept
@@ -264,7 +339,7 @@ test("prodelision follows the same parenthesis convention (§7-2)", () => {
 
 test("solver override: synizesis split is honored (§7-3, J12)", () => {
   const out = ipa("Lāvīniaque", {
-    overrides: [{ line: 0, word: "Lāvīniaque", split: "lā-vī-nja-que" }],
+    overrides: [{ line: 0, word: 0, split: "lā-vī-nja-que" }],
   });
   assert.equal(out, "laː.wiː.ˈnja.kʷɛ"); // gold L2
 });
@@ -274,6 +349,61 @@ test("solver override: letter mismatch throws (contract bug surfaces loudly)", (
     ipa("Lāvīniaque", {
       overrides: [{ line: 0, word: 0, split: "lā-vī-na-que" }],
     })
+  );
+});
+
+test("F-02 (v1 limitation): synizesis needing letter substitution is rejected", () => {
+  // aurea → au-rja would need e→j substitution; v1 supports only lossless
+  // i/u→j/w contractions (G2P.md §7-3 known limitation) — the
+  // reconstruction check rejects the rest loudly
+  assert.throws(() =>
+    ipa("aurea", { overrides: [{ line: 0, word: 0, split: "au-rja" }] })
+  );
+  // ...while the default (no override) stays three syllables
+  assert.equal(ipa("aurea"), "ˈaʊ̯.rɛ.a");
+});
+
+test("F-09: selector strictness — strings, duplicates, unmatched all throw", () => {
+  assert.throws(() =>
+    ipa("Lāvīniaque", {
+      overrides: [{ line: 0, word: "Lāvīniaque", split: "lā-vī-nja-que" }],
+    })
+  );
+  assert.throws(() =>
+    ipa("Lāvīniaque vēnit", {
+      overrides: [
+        { line: 0, word: 0, split: "lā-vī-nja-que" },
+        { line: 0, word: 0, split: "lā-vī-nja-que" },
+      ],
+    })
+  );
+  assert.throws(() =>
+    ipa("Lāvīniaque", {
+      overrides: [{ line: 0, word: 3, split: "lā-vī-nja-que" }],
+    })
+  );
+  assert.throws(() =>
+    ipa("Lāvīniaque", {
+      overrides: [{ line: 2, word: 0, split: "lā-vī-nja-que" }],
+    })
+  );
+});
+
+test("F-09: malformed splits (stray hyphens, empty segments) throw", () => {
+  for (const split of ["-lā-vī-nja-que", "lā--vī-nja-que", "lā-vī-nja-que-"]) {
+    assert.throws(
+      () =>
+        ipa("Lāvīniaque", { overrides: [{ line: 0, word: 0, split }] }),
+      split
+    );
+  }
+});
+
+test("F-09: orthographic normalization is unified (j/i, w/v on both sides)", () => {
+  // the solver may spell consonantal u as w where the text has v
+  assert.equal(
+    ipa("servus", { overrides: [{ line: 0, word: 0, split: "ser-wus" }] }),
+    ipa("servus")
   );
 });
 
