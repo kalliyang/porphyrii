@@ -3,10 +3,13 @@
  *
  * Thin adapter between app/audio.js and the vendored espeak-ng-wasm v0.1.1
  * driver (vendor/espeak-ng/, contract: espeak-ng-wasm INTERFACE.md §3).
- * The audio state machine consumes exactly two functions:
+ * The audio state machine consumes two functions:
  *
  *   playIPA(ipa)  → Promise<void>  (resolves when playback ends or is stopped)
  *   stop()        → void           (halts current playback; safe anytime)
+ *
+ * plus ready() → Promise<void>, which the controller's loader awaits so the
+ * "loading" state covers the actual engine download/compile (UI.md §3.3).
  *
  * Why a wrapper instead of using the vendored module directly:
  *   1. stop(): the vendor contract has no stop — playback there is a single
@@ -76,6 +79,16 @@ function ensureInit() {
 // Eager: the dynamic import of this module is the audio controller's
 // "loading" state — start the one-time download/compile now, not on Play.
 ensureInit();
+
+/**
+ * Resolves when the one-time engine load has finished (or rejects with the
+ * init error). app/audio.js's default loader awaits this so the controller's
+ * "loading" state spans the REAL download+compile instead of just the module
+ * fetch; playIPA() awaits it internally as well.
+ */
+export function ready() {
+  return ensureInit();
+}
 
 /* --------------------------------------------------------- IPA chunking */
 

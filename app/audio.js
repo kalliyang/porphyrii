@@ -30,7 +30,13 @@ export class AudioController {
     this._listeners = new Set();
     this._loadDriver =
       deps.loadDriver ??
-      (() => import("../core/espeak-wasm-driver.js"));
+      (() =>
+        import("../core/espeak-wasm-driver.js").then(async (m) => {
+          // Await the engine's one-time download/compile so the "loading"
+          // state spans the real wait (UI.md §3.3), not just the module fetch.
+          await m.ready();
+          return m;
+        }));
   }
 
   /** @param {(state:string, controller:AudioController) => void} fn */
