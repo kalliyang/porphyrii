@@ -88,7 +88,11 @@ const SOLVER_COMMON_TAIL = `3. Determine the meter. Fully supported: dactylic_he
    accordingly). Prose: meter="prose", no foot division.
 4. Produce the scansion: divide every verse line into feet; mark elisions by
    wrapping the elided syllable in parentheses, e.g. mult(um) ill(e) et;
-   prodelision likewise (factum(st)).
+   prodelision likewise (factum(st)). When a word undergoes synizesis or
+   another contraction, write its syllable strings in phonetic spelling —
+   j for consonantal i, w for consonantal u (Lā-vī-nja-que, never
+   Lā-vī-ni-a-que): the G2P engine consumes these strings directly, and
+   only this spelling can express the contraction.
 5. Translate into idiomatic English.
 6. Grammar and source notes: key constructions; identify author/work if
    known; if the source is unknown or uncertain, SAY SO explicitly.`;
