@@ -1,12 +1,14 @@
 # Porphyrii
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21982752.svg)](https://doi.org/10.5281/zenodo.21982752)
+
 **Latin poetry scansion, macron restoration, and recitation — a Progressive Web App.**
 
 Porphyrii restores vowel quantities (macrons) in Classical Latin verse and prose, scans the meter
 (dactylic hexameter, elegiac couplet, and more), translates and annotates, and reads the text aloud
 with rule-based classical pronunciation — entirely in the browser, offline-capable, no account required.
 
-**Status:** under construction — public beta at [porphyrii.org](https://porphyrii.org), August 2026.
+**Status:** public beta (v0.9.0-beta) live at [porphyrii.org](https://porphyrii.org), August 2026.
 
 ## How it works
 
