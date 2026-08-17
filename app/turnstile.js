@@ -23,6 +23,8 @@ export class TurnstileManager {
     this.container = container;
     this.widgetId = null;
     this.ready = false;
+    /** Last Cloudflare error code (e.g. "110200"), kept for diagnostics. */
+    this.lastErrorCode = null;
   }
 
   /**
@@ -39,9 +41,23 @@ export class TurnstileManager {
       size: "invisible",
       "expired-callback": () => this._reset(),
       "timeout-callback": () => this._reset(),
-      "error-callback": () => this._reset(),
+      "error-callback": (code) => {
+        this._recordError(code);
+        this._reset();
+      },
     });
     this.ready = true;
+  }
+
+  /**
+   * Surface the Cloudflare error code instead of swallowing it (F-W6-3):
+   * without the code, a real-user challenge failure is undiagnosable. The
+   * code goes to the console (always) and into the user-facing error text
+   * (via getToken's rejection) so a bug report can carry it.
+   */
+  _recordError(code) {
+    this.lastErrorCode = code ?? null;
+    console.warn(`[porphyrii] Turnstile error (code ${code ?? "unknown"})`);
   }
 
   _reset() {
@@ -69,8 +85,14 @@ export class TurnstileManager {
       try {
         window.turnstile.execute(this.container, {
           callback: (token) => resolve(token),
-          "error-callback": () =>
-            reject(new Error("Human verification failed. Please try again.")),
+          "error-callback": (code) => {
+            this._recordError(code);
+            reject(
+              new Error(
+                `Human verification failed (code ${code ?? "unknown"}). Please try again — if this keeps happening, please report the code.`
+              )
+            );
+          },
           "expired-callback": () =>
             reject(new Error("Human verification expired. Please try again.")),
           "timeout-callback": () =>
