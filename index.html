@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Anti-FOUC theme bootstrap (SPEC §7.2): MUST run before any paint. -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("ds-theme");
+        if (t === "light" || t === "dark") {
+          document.documentElement.dataset.theme = t;
+        }
+      } catch (e) { /* storage unavailable — fall back to system scheme */ }
+    })();
+  </script>
+  <title>Porphyrii — Latin Scansion &amp; Recitation</title>
+  <meta name="description" content="Porphyrii restores vowel quantities in Classical Latin, scans the meter, translates, annotates, and reads verse aloud with rule-based classical pronunciation. Free, no account, offline-capable.">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F4F5F0">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1A1C20">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preload" href="fonts/Cardo-Regular.woff2" type="font/woff2" as="font" crossorigin>
+  <link rel="preload" href="fonts/Inter-Variable.woff2" type="font/woff2" as="font" crossorigin>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&amp;onload=__porTurnstileReady" async defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="app header-row">
+      <div>
+        <h1 class="wordmark">Porphyrii</h1>
+        <p class="tagline">Latin scansion, macrons &amp; recitation</p>
+      </div>
+      <button id="theme-toggle" class="btn btn-secondary btn-icon" type="button"
+              aria-label="Switch color theme">
+        <svg id="theme-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" class="app">
+    <!-- §1 Input -->
+    <section id="input-section" aria-labelledby="input-heading">
+      <h2 id="input-heading" class="visually-hidden">Latin text input</h2>
+      <label class="input-label" for="input-text">
+        Paste Classical Latin verse or prose
+      </label>
+      <textarea id="input-text" lang="la" rows="7" spellcheck="false"
+                autocomplete="off" autocapitalize="off"
+                placeholder="Arma virumque cano, Troiae qui primus ab oris"></textarea>
+      <div class="input-meta">
+        <span id="char-counter" aria-live="off">0 / 2,000</span>
+      </div>
+      <div class="button-row">
+        <button id="analyze-btn" class="btn btn-primary" type="button">Analyze</button>
+        <button id="cancel-btn" class="btn btn-secondary" type="button" hidden>Cancel</button>
+      </div>
+      <p id="stage-status" class="stage-status" role="status" aria-live="polite"></p>
+      <div id="form-alerts" class="alerts"></div>
+    </section>
+
+    <!-- §2 Result -->
+    <section id="result-section" aria-labelledby="result-heading" hidden>
+      <h2 id="result-heading">Analysis</h2>
+      <div id="result-alerts" class="alerts"></div>
+
+      <div class="result-grid">
+        <article id="scansion-card" class="card" aria-labelledby="scansion-heading">
+          <header class="card-header">
+            <h3 id="scansion-heading">Scansion</h3>
+            <span class="card-header-side">
+              <span id="meter-badge" class="badge"></span>
+              <span id="confidence-note" class="confidence-note" hidden></span>
+            </span>
+          </header>
+          <div id="validator-warnings" class="alerts"></div>
+          <div id="scansion-body" class="scansion-body"></div>
+          <footer class="card-note">
+            AI-assisted scansion — verify against your textbook.
+          </footer>
+        </article>
+
+        <div class="result-side">
+          <article id="translation-card" class="card" aria-labelledby="translation-heading">
+            <header class="card-header">
+              <h3 id="translation-heading">Translation</h3>
+            </header>
+            <div id="translation-body" class="prose-block"></div>
+          </article>
+
+          <article id="grammar-card" class="card" aria-labelledby="grammar-heading">
+            <header class="card-header">
+              <h3 id="grammar-heading">Grammar notes</h3>
+            </header>
+            <div id="grammar-body" class="prose-block"></div>
+          </article>
+
+          <article id="recitation-card" class="card" aria-labelledby="recitation-heading">
+            <header class="card-header">
+              <h3 id="recitation-heading">Recitation</h3>
+            </header>
+            <div class="recitation-controls">
+              <button id="play-btn" class="btn btn-primary" type="button">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
+                  <path d="M8 5v14l11-7z"></path>
+                </svg>
+                <span id="play-label">Play</span>
+              </button>
+              <span id="audio-status" class="audio-status" role="status" aria-live="polite"></span>
+            </div>
+            <label class="ipa-toggle" for="ipa-toggle">
+              <input type="checkbox" id="ipa-toggle">
+              Show IPA transcription
+            </label>
+            <div id="ipa-body" class="ipa-body" hidden></div>
+            <footer class="card-note">
+              Formant-synthesis teaching pronunciation (W. S. Allen, <i>Vox Latina</i>) —
+              an approximation, not a reconstructed performance. See About &amp; Privacy.
+            </footer>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- §3 History -->
+    <section id="history-section" aria-labelledby="history-heading">
+      <details id="history-details">
+        <summary id="history-heading">History <span id="history-count" class="history-count"></span></summary>
+        <p class="history-hint">Stored only in this browser (IndexedDB). Nothing is uploaded.</p>
+        <ul id="history-list" class="history-list"></ul>
+      </details>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="app footer-row">
+      <button id="about-open" class="linklike" type="button">About &amp; Privacy</button>
+      <span>© 2026 Zhiping Yang · AGPL-3.0</span>
+    </div>
+  </footer>
+
+  <!-- About & Privacy (UI.md §8; full-screen dialog) -->
+  <div id="about-view" class="about-view" role="dialog" aria-modal="true"
+       aria-labelledby="about-heading" hidden>
+    <div class="about-panel" role="document">
+      <header class="about-header">
+        <h2 id="about-heading">About &amp; Privacy</h2>
+        <button id="about-close" class="btn btn-secondary btn-icon" type="button" aria-label="Close About &amp; Privacy">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M6 6l12 12M18 6L6 18"></path>
+          </svg>
+        </button>
+      </header>
+      <div class="about-body">
+        <h3>The project</h3>
+        <p>
+          Porphyrii restores vowel quantities (macrons) in Classical Latin verse and prose,
+          scans the meter, translates and annotates, and reads the text aloud with rule-based
+          classical pronunciation. It is built for Latin students, teachers, and independent
+          learners who want to check quantities and scansion against their textbook and to
+          develop a feel for the rhythm of Latin verse.
+        </p>
+        <p>
+          Porphyrii is an independent project by <strong>Zhiping “Kalli” Yang</strong>,
+          <!-- D10 (pending Athena confirmation): real-name mentor credit below. -->
+          mentored by Xinjie Fang of the
+          <a href="https://github.com/classical-cat-dh-lab">Classical Cat Digital Humanities Lab</a>.
+          After university enrollment, the project is planned to join the lab’s project group.
+        </p>
+
+        <h3>Your data</h3>
+        <p>
+          Porphyrii has <strong>no accounts, no cookies, and no analytics</strong>. Your
+          history lives only in this browser’s IndexedDB storage; deleting it is entirely
+          under your control, and nothing is synced anywhere.
+        </p>
+        <p>
+          When you press Analyze, the text you entered is sent over HTTPS to our serverless
+          backend on Cloudflare, which forwards it to a third-party large-language-model API
+          for processing — Google Gemini (primary) or DeepSeek (fallback), both under the
+          project owner’s own accounts. The backend keeps no copy of your text: nothing is
+          written to logs, databases, or caches beyond the lifetime of your request. The
+          processing is governed by the providers’ own policies:
+          <a href="https://policies.google.com/privacy">Google Privacy Policy</a>,
+          <a href="https://ai.google.dev/gemini-api/terms">Gemini API Terms</a>, and the
+          <a href="https://www.deepseek.com/en/privacy">DeepSeek Privacy Policy</a>.
+          Cloudflare processes requests as described in the
+          <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare Privacy Policy</a>.
+          Cloudflare Turnstile runs on this page solely to keep the service free of abuse.
+        </p>
+
+        <h3>Pronunciation limitations</h3>
+        <p>
+          Recitation uses eSpeak NG formant synthesis driven by our own rule-based
+          grapheme-to-phoneme engine, with the phonology of W. S. Allen’s
+          <i>Vox Latina</i> (2nd ed.) as its target. It is a <strong>teaching
+          approximation</strong>, not an academic reconstruction performance. Known
+          simplifications: word-final <span lang="la">-m</span> is pronounced as [m] rather
+          than nasalized, and elided syllables (shown in parentheses) are not read aloud.
+        </p>
+
+        <h3>AI-assisted results</h3>
+        <p>
+          Macron restoration, scansion, translation, and grammar notes are produced with
+          AI assistance and <strong>can be wrong</strong>. Always verify against your
+          textbook before relying on them in class or in coursework.
+        </p>
+        <p>
+          Two deterministic checks help you judge each result. The text-integrity check
+          proves the model did not alter your letters (and shows a diff when it did); it
+          says nothing about whether the scansion is <i>correct</i>. The quantity validator
+          checks that the scansion is self-consistent with the restored macrons; a macron
+          that is itself wrong (a lexical quantity error) is beyond its reach.
+        </p>
+
+        <h3>Licenses</h3>
+        <p>
+          Code: <a href="https://www.gnu.org/licenses/agpl-3.0.html">GNU AGPL v3.0</a> ·
+          Documentation: <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> ·
+          © 2026 Zhiping Yang. The bundled recitation engine eSpeak NG remains under its own
+          GPLv3 license. Source code and issue tracker:
+          <a href="https://github.com/kalliyang/porphyrii">github.com/kalliyang/porphyrii</a>.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div id="turnstile-container" class="turnstile-container" aria-hidden="true"></div>
+
+  <noscript>
+    <p class="noscript-note">Porphyrii needs JavaScript to analyze Latin text. Please enable JavaScript and reload.</p>
+  </noscript>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

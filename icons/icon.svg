@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Porphyrii">
+  <!-- Brand icon: Tyrian purple field, Athenian gold epigraphic P (SPEC §12:
+       purple/gold alternation is the lab's identity layer). -->
+  <rect width="512" height="512" rx="96" fill="#66023C"/>
+  <rect x="40" y="40" width="432" height="432" rx="64" fill="none" stroke="#D4AF37" stroke-width="10"/>
+  <text x="256" y="368" text-anchor="middle" font-family="Cinzel, Cardo, Georgia, serif"
+        font-size="300" font-weight="700" fill="#D4AF37">P</text>
+</svg>
