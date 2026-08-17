@@ -11,13 +11,12 @@
  *     the backend uses, so the UI's error path shows the offline copy
  *     instead of a bare TypeError.
  *
- * C7 SEAM: when vendor/espeak-ng/ lands (espeak-ng-wasm v0.1.1), append its
- * wasm + data files to PRECACHE below (they are MB-sized, so ALSO bump
- * VERSION) — the audio state machine (app/audio.js) already handles the
- * "cached engine available offline" case once the files are here.
+ * C7 (2026-08-17): vendor/espeak-ng/ landed (espeak-ng-wasm v0.1.1) — the
+ * engine artifacts and the driver modules are precached below, so recitation
+ * works offline after the first visit (R-NF6).
  */
 
-const VERSION = "porphyrii-2026-08-17-w6";
+const VERSION = "porphyrii-2026-08-17-w7";
 const PRECACHE_NAME = `precache-${VERSION}`;
 const RUNTIME_NAME = `runtime-${VERSION}`;
 
@@ -45,7 +44,13 @@ const PRECACHE = [
   "/fonts/Cardo-Bold.woff2",
   "/fonts/Cardo-Italic.woff2",
   "/fonts/Inter-Variable.woff2",
-  // C7 SEAM: "/vendor/espeak-ng/espeak-ng.wasm", "/vendor/espeak-ng/…data…"
+  // Recitation engine (espeak-ng-wasm v0.1.1, ~1.1 MB pre-gzip total)
+  "/core/espeak-wasm-driver.js",
+  "/vendor/espeak-ng/espeak-wasm-driver.js",
+  "/vendor/espeak-ng/espeak-ng.js",
+  "/vendor/espeak-ng/espeak-ng.wasm",
+  "/vendor/espeak-ng/espeak-ng.data",
+  "/vendor/espeak-ng/la.json",
 ];
 
 self.addEventListener("install", (event) => {

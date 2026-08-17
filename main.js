@@ -616,7 +616,7 @@ function renderAudioState(state) {
       els.playLabel.textContent = "Retry";
       els.audioStatus.textContent = offlineError()
         ? "Pronunciation requires a one-time download — reconnect and retry."
-        : "The recitation engine is not available yet (it ships with the beta). The IPA transcription below works now.";
+        : "The recitation engine failed to load. Please retry; the IPA transcription below still works.";
       break;
   }
 }

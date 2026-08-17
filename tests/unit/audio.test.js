@@ -19,14 +19,18 @@ test("initial state is unloaded", () => {
   assert.equal(new AudioController().state, "unloaded");
 });
 
-test("default loader (C7 module absent) degrades to load-error, never throws", async () => {
-  const c = new AudioController(); // core/espeak-wasm-driver.js does not exist yet
+test("default loader resolves the vendored driver module (playIPA + stop)", async () => {
+  // Since W7 the C7 seam module exists: core/espeak-wasm-driver.js wraps
+  // vendor/espeak-ng/. The default loader must import it cleanly and the
+  // module must expose the seam surface the controller relies on.
+  const c = new AudioController();
   const seen = trace(c);
   const ok = await c.load();
-  assert.equal(ok, false);
-  assert.equal(c.state, "load-error");
-  assert.ok(c.error);
-  assert.deepEqual(seen, ["loading", "load-error"]);
+  assert.equal(ok, true);
+  assert.equal(c.state, "ready");
+  assert.equal(typeof c.driver.playIPA, "function");
+  assert.equal(typeof c.driver.stop, "function");
+  assert.deepEqual(seen, ["loading", "ready"]);
 });
 
 test("load-error is retryable: a later successful load reaches ready", async () => {
