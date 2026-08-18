@@ -5,8 +5,15 @@
  * Tokens are single-use and expire after 300 s, and both endpoints
  * siteverify independently — so the analysis flow calls getToken() once
  * before /api/validate and again before /api/analyze, never reusing one.
- * expired/timeout callbacks reset the widget; the next getToken() simply
- * executes again (UI.md §3.1 "自动重取").
+ *
+ * The widget CACHES its token: execute() after a successful challenge
+ * resolves with the SAME token unless the widget is reset first, and by
+ * then the backend has already consumed it — observed in production
+ * 2026-08-18 as siteverify "timeout-or-duplicate" on the Retry path (and
+ * it would equally have broken phase-2 /api/analyze with token2 == token1).
+ * getToken() therefore resets before every execute, guaranteeing a fresh
+ * challenge; the expired/timeout/error callbacks reset as well
+ * (UI.md §3.1 "自动重取").
  *
  * DOM footprint: the caller passes the container element; this module
  * never touches `document` itself (orchestrator stays the only DOM layer).
@@ -83,6 +90,10 @@ export class TurnstileManager {
         return;
       }
       try {
+        // Force a fresh single-use token: without a reset, execute() can
+        // resolve with the cached (already server-consumed) token — see the
+        // header note on widget caching.
+        this._reset();
         window.turnstile.execute(this.container, {
           callback: (token) => resolve(token),
           "error-callback": (code) => {

@@ -234,7 +234,14 @@ export async function runGuard(env, text) {
       validate: guardValidator,
     }
   );
-  if (!r.ok) return { ok: false };
+  if (!r.ok) {
+    // Diagnosability (F-W6-3 spirit): without this, a production chain
+    // failure is indistinguishable from a missing binding — attempts carry
+    // provider/HTTP-status detail only, never key material or user text.
+    console.warn(`[porphyrii] guard chain failed: ${JSON.stringify(r.attempts)}`);
+    return { ok: false };
+  }
+  console.log(`[porphyrii] guard ok via ${r.provider} (${r.model})`);
   return {
     ok: true,
     isLatin: r.data.is_latin,
@@ -264,6 +271,10 @@ export async function runSolver(env, text, hasMacron) {
       validate: validateAnalysis,
     }
   );
-  if (!r.ok) return { ok: false };
+  if (!r.ok) {
+    console.warn(`[porphyrii] solver chain failed: ${JSON.stringify(r.attempts)}`);
+    return { ok: false };
+  }
+  console.log(`[porphyrii] solver ok via ${r.provider} (${r.model})`);
   return { ok: true, data: r.data, provider: r.provider, model: r.model };
 }
