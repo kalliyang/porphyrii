@@ -33,7 +33,12 @@ export async function onRequestPost(context) {
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
 
   const ts = await verifyTurnstile(env.TURNSTILE_SECRET, body?.turnstile_token, ip);
-  if (!ts.ok) return json({ ok: false, reject_reason: ts.reason }, ts.status);
+  if (!ts.ok) {
+    return json(
+      { ok: false, reject_reason: ts.reason, verify_codes: ts.codes ?? null },
+      ts.status
+    );
+  }
 
   const pre = precheck(body?.text);
   if (!pre.ok) return json({ ok: false, reject_reason: pre.reason }, 400);

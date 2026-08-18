@@ -13,9 +13,13 @@ const TIMEOUT_MS = 10_000;
  * @param {string} secret TURNSTILE_SECRET (Pages secret)
  * @param {unknown} token turnstile_token from the request body
  * @param {string|undefined} ip CF-Connecting-IP (optional, improves accuracy)
- * @returns {Promise<{ ok: boolean, status?: number, reason?: string }>}
+ * @returns {Promise<{ ok: boolean, status?: number, reason?: string, codes?: string[] }>}
  *   reason is user-facing English. status: 400 = challenge failed,
- *   502 = verification service unreachable.
+ *   502 = verification service unreachable. codes carries the siteverify
+ *   error-codes array (e.g. ["invalid-input-secret"]) for diagnostics —
+ *   it is passed through to the JSON response as verify_codes (not shown
+ *   in the user-facing reason), same spirit as the frontend error-code
+ *   passthrough (F-W6-3).
  */
 export async function verifyTurnstile(secret, token, ip) {
   if (typeof token !== "string" || token.length === 0) {
@@ -47,9 +51,12 @@ export async function verifyTurnstile(secret, token, ip) {
   }
 
   if (data.success === true) return { ok: true };
+  const codes = Array.isArray(data["error-codes"]) ? data["error-codes"] : [];
+  console.warn(`[porphyrii] siteverify rejected token: ${codes.join(",") || "no error-codes"}`);
   return {
     ok: false,
     status: 400,
     reason: "Human verification failed. Please try again.",
+    codes,
   };
 }

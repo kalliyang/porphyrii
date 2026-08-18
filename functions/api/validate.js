@@ -31,7 +31,12 @@ export async function onRequestPost(context) {
   // 1. Turnstile (R-F12; this endpoint verifies independently — tokens are
   //    single-use, PRD §7.1)
   const ts = await verifyTurnstile(env.TURNSTILE_SECRET, body?.turnstile_token, ip);
-  if (!ts.ok) return json({ ok: false, reject_reason: ts.reason }, ts.status);
+  if (!ts.ok) {
+    return json(
+      { ok: false, reject_reason: ts.reason, verify_codes: ts.codes ?? null },
+      ts.status
+    );
+  }
 
   // 2. Programmatic prechecks (R-F3): length, charset, has_macron — no LLM
   const pre = precheck(body?.text);
