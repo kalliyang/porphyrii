@@ -16,7 +16,7 @@
  * works offline after the first visit (R-NF6).
  */
 
-const VERSION = "porphyrii-2026-08-18-w7b";
+const VERSION = "porphyrii-2026-08-18-w7c"; // main.js changed (verify_codes display) — precached content rule
 const PRECACHE_NAME = `precache-${VERSION}`;
 const RUNTIME_NAME = `runtime-${VERSION}`;
 

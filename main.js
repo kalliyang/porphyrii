@@ -346,7 +346,8 @@ async function onAnalyze() {
     setBusy(false);
     showAlert(els.formAlerts, "error", {
       title: "This text can't be analyzed",
-      message: v.data.reject_reason, // backend copy is user-facing by contract
+      // backend copy is user-facing by contract; verify_codes appended when present
+      message: withVerifyCodes(v.data.reject_reason, v.data),
     });
     return;
   }
@@ -362,7 +363,19 @@ function backendMessage(resp, fallback) {
       return `${base} You can retry in about ${mins} minute${mins === 1 ? "" : "s"}.`;
     }
   }
-  return base;
+  return withVerifyCodes(base, resp?.data);
+}
+
+/**
+ * Append siteverify error codes (verify_codes, passed through by the
+ * backend since the turnstile-diagnostics fix) to a user-facing message so
+ * any bug report carries the machine-readable cause — same spirit as the
+ * frontend challenge-failure code (F-W6-3).
+ */
+function withVerifyCodes(message, data) {
+  const codes = Array.isArray(data?.verify_codes) ? data.verify_codes.filter(Boolean) : [];
+  if (!codes.length) return message;
+  return `${message} (code ${codes.join(", ")})`;
 }
 
 function offlineMessage() {
