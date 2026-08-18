@@ -1,7 +1,8 @@
 /**
  * LLM prompt contracts — embedded verbatim from the project's prompt
  * contract document (PROMPTS.md v0.2.1, academically reviewed 2026-08-15,
- * few-shot example approved with two macron corrections).
+ * few-shot example approved with two macron corrections; +0.2.2 synizesis
+ * j/w spelling clause, +0.2.3 best-effort meter "other:" prefix clause).
  *
  * Prompts are English (model working language = output language).
  * User text is always wrapped in <user_text> tags (injection guard).
@@ -85,7 +86,9 @@ TASK:`;
 
 const SOLVER_COMMON_TAIL = `3. Determine the meter. Fully supported: dactylic_hexameter, elegiac_couplet.
    Best-effort: hendecasyllabic, iambic_senarius (set meter_confidence
-   accordingly). Prose: meter="prose", no foot division.
+   accordingly) — these names are NOT schema values: return them with the
+   "other:" prefix, e.g. meter="other:hendecasyllabic".
+   Prose: meter="prose", no foot division.
 4. Produce the scansion: divide every verse line into feet; mark elisions by
    wrapping the elided syllable in parentheses, e.g. mult(um) ill(e) et;
    prodelision likewise (factum(st)). When a word undergoes synizesis or
