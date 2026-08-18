@@ -2,7 +2,8 @@
  * LLM prompt contracts — embedded verbatim from the project's prompt
  * contract document (PROMPTS.md v0.2.1, academically reviewed 2026-08-15,
  * few-shot example approved with two macron corrections; +0.2.2 synizesis
- * j/w spelling clause, +0.2.3 best-effort meter "other:" prefix clause).
+ * j/w spelling clause, +0.2.3 best-effort meter "other:" prefix clause,
+ * +0.2.4 line-correspondence clause).
  *
  * Prompts are English (model working language = output language).
  * User text is always wrapped in <user_text> tags (injection guard).
@@ -43,6 +44,11 @@ const SOLVER_SCHEMA_BLOCK = `OUTPUT: JSON only, exactly this schema:
   "grammar_notes": string            // plain text
 }
 For prose: scansion entries contain only line/text (macronized); feet=[].
+Line structure: scansion_text must keep the input's line breaks exactly —
+never join or split lines. Provide exactly one scansion entry per line of
+scansion_text, in the same order, each entry's text matching its line. This
+applies to prose as well: never split one input line into per-sentence
+entries.
 The letter sequence of original_text_cleaned must be identical to the input
 unless spelling_corrected is true. The letter sequence of scansion_text must
 be identical to original_text_cleaned apart from macrons, elision parens,

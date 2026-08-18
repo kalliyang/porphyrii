@@ -27,6 +27,7 @@ import {
   retryNudge,
 } from "./prompts.js";
 import { validateAnalysis } from "./contract.js";
+import { normalizeLatin } from "../../services/text-integrity.js";
 
 const GUARD_TIMEOUT_MS = 20_000;
 const SOLVER_TIMEOUT_MS = 90_000;
@@ -34,6 +35,16 @@ const SOLVER_TIMEOUT_MS = 90_000;
 // providers (measured 2026-08-16: gemini-3.7-flash thought 2.3k + answered
 // 3.9k on 7 lines; deepseek-v4-pro reasoned 9.5k tokens on ONE line). Caps
 // must carry thinking headroom, not just the visible JSON.
+//
+// DeepSeek SOLVER calls run with thinking DISABLED (2026-08-18, fix round 3):
+// post-0813-GA reasoning at the default effort=high makes any solver call
+// take 4-10+ minutes (measured: 4 verse lines >300 s; 2 prose sentences
+// burned 13.8k reasoning tokens) — always past SOLVER_TIMEOUT_MS and the
+// empirical Pages wall-clock ceiling (~247 s), so the fallback path was
+// effectively dead for geo-blocked edges. reasoning_effort:"low" does not
+// converge (150 s+ timeouts on both models); thinking:{type:"disabled"}
+// completes 7 verse lines in ~40 s with VALID contract output. The guard
+// keeps the default (small task, answers in seconds).
 const GUARD_MAX_TOKENS = 4_096;
 const SOLVER_MAX_TOKENS = 32_768;
 
@@ -73,8 +84,11 @@ async function callGemini({ key, model, system, user, timeoutMs, maxTokens, temp
   let data;
   try {
     data = await resp.json();
-  } catch {
-    throw new TransportError("gemini returned non-JSON envelope");
+  } catch (e) {
+    // An abort while the body streams in is a timeout, not a parse failure —
+    // mislabeling it cost a diagnosis cycle on 2026-08-18.
+    const aborted = e && (e.name === "TimeoutError" || e.name === "AbortError");
+    throw new TransportError(aborted ? "gemini response body timed out" : "gemini returned non-JSON envelope");
   }
   const block = data?.promptFeedback?.blockReason;
   if (block) throw new TransportError(`gemini blocked prompt: ${block}`);
@@ -87,7 +101,7 @@ async function callGemini({ key, model, system, user, timeoutMs, maxTokens, temp
   return text;
 }
 
-async function callDeepSeek({ key, model, system, user, timeoutMs, maxTokens, temperature }) {
+async function callDeepSeek({ key, model, system, user, timeoutMs, maxTokens, temperature, noThink }) {
   let resp;
   try {
     resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -106,6 +120,9 @@ async function callDeepSeek({ key, model, system, user, timeoutMs, maxTokens, te
         max_tokens: maxTokens,
         temperature,
         stream: false,
+        // Solver only: thinking disabled (see header note). Undefined for
+        // the guard — the API default (enabled/high) stays in effect there.
+        ...(noThink ? { thinking: { type: "disabled" } } : {}),
       }),
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -118,8 +135,9 @@ async function callDeepSeek({ key, model, system, user, timeoutMs, maxTokens, te
   let data;
   try {
     data = await resp.json();
-  } catch {
-    throw new TransportError("deepseek returned non-JSON envelope");
+  } catch (e) {
+    const aborted = e && (e.name === "TimeoutError" || e.name === "AbortError");
+    throw new TransportError(aborted ? "deepseek response body timed out" : "deepseek returned non-JSON envelope");
   }
   const text = data?.choices?.[0]?.message?.content ?? "";
   if (!text.trim()) throw new TransportError("deepseek empty content");
@@ -129,6 +147,57 @@ async function callDeepSeek({ key, model, system, user, timeoutMs, maxTokens, te
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Deterministic repair for prose line fragmentation (2026-08-18, fix round 3):
+ * the no-think DeepSeek solver reliably splits a single input LINE of prose
+ * into per-SENTENCE scansion entries, so scansion.length no longer matches
+ * the non-empty line count of scansion_text and the cross-check rejects it —
+ * the 0.2.4 prompt clause and the retry nudge do not change this behaviour.
+ *
+ * The fragmentation is content-preserving (the concatenated entry texts still
+ * equal scansion_text), so regroup entries greedily against the scansion_text
+ * lines using the SAME normalizeLatin the cross-check uses. If alignment
+ * fails anywhere, the object is returned untouched and the validator rejects
+ * it exactly as before — the repair can only turn a false structural
+ * rejection into a validated pass, never smuggle content past the validator
+ * (the repaired object still goes through validateAnalysis in full).
+ */
+export function repairProseLineFragmentation(d) {
+  if (d?.meter !== "prose" || !Array.isArray(d?.scansion) || typeof d?.scansion_text !== "string") {
+    return d;
+  }
+  const textLines = d.scansion_text
+    .split(/\r\n|\r|\n/)
+    .filter((l) => normalizeLatin(l).length > 0);
+  if (textLines.length === d.scansion.length) return d; // already aligned
+
+  const merged = [];
+  let i = 0;
+  for (let lineIdx = 0; lineIdx < textLines.length; lineIdx++) {
+    const target = normalizeLatin(textLines[lineIdx]);
+    const texts = [];
+    const notes = [];
+    let acc = "";
+    while (i < d.scansion.length && acc !== target) {
+      const e = d.scansion[i++];
+      if (typeof e?.text !== "string") return d;
+      texts.push(e.text.trim());
+      if (typeof e.note === "string" && e.note.trim()) notes.push(e.note.trim());
+      acc = normalizeLatin(texts.join(" "));
+    }
+    if (acc !== target) return d; // overshoot or ran out — not a clean split
+    merged.push({
+      line: lineIdx + 1,
+      text: texts.join(" "),
+      feet: [],
+      foot_types: [],
+      note: notes.length ? notes.join(" ") : null,
+    });
+  }
+  if (i !== d.scansion.length) return d; // leftover entries — misaligned
+  return { ...d, scansion: merged };
+}
 
 /** Tolerate markdown fences / surrounding prose around the JSON object. */
 function extractJson(raw) {
@@ -146,7 +215,9 @@ function extractJson(raw) {
 /**
  * Two-provider chain with one validation retry per provider.
  *
- * @param {Array} providers [{ name, key, model, call }]
+ * @param {Array} providers [{ name, key, model, call, noThink?, timeoutMs? }]
+ *   noThink/timeoutMs are per-provider overrides passed through to call
+ *   (DeepSeek solver: thinking disabled + a bigger wall-clock budget).
  * @param {object} job { system, user, timeoutMs, maxTokens, temperature, validate }
  * @returns {Promise<{ ok: boolean, data?: object, provider?: string,
  *   model?: string, reason?: string, attempts: Array }>}
@@ -166,9 +237,10 @@ async function runChain(providers, job) {
           model: p.model,
           system: job.system,
           user: job.user + nudge,
-          timeoutMs: job.timeoutMs,
+          timeoutMs: p.timeoutMs ?? job.timeoutMs,
           maxTokens: job.maxTokens,
           temperature: job.temperature,
+          noThink: p.noThink,
         });
         let parsed;
         try {
@@ -179,9 +251,14 @@ async function runChain(providers, job) {
           if (attempt === 2) return { ok: false, reason: "validation", attempts };
           continue;
         }
-        const v = job.validate(parsed);
+        // Optional deterministic pre-validation repair (e.g. prose line
+        // defragmentation); the candidate — not the raw parse — is what gets
+        // validated AND returned, so repaired output never bypasses the
+        // validator.
+        const candidate = job.transform ? job.transform(parsed) : parsed;
+        const v = job.validate(candidate);
         if (v.ok) {
-          return { ok: true, data: parsed, provider: p.name, model: p.model, attempts };
+          return { ok: true, data: candidate, provider: p.name, model: p.model, attempts };
         }
         attempts.push({ provider: p.name, attempt, error: "validation", detail: v.errors });
         nudge = retryNudge(v.errors);
@@ -260,7 +337,12 @@ export async function runSolver(env, text, hasMacron) {
   const r = await runChain(
     [
       { name: "gemini", key: env.GEMINI_API_KEY, model: env.SOLVER_MODEL, call: callGemini },
-      { name: "deepseek", key: env.DEEPSEEK_API_KEY, model: env.FALLBACK_SOLVER_MODEL, call: callDeepSeek },
+      { name: "deepseek", key: env.DEEPSEEK_API_KEY, model: env.FALLBACK_SOLVER_MODEL, call: callDeepSeek,
+        // Thinking disabled (header note). ~6 s/verse-line no-think, so a
+        // max-size input (~25 lines / 2,000 chars) needs ~150 s; 170 s
+        // leaves headroom under the empirical Pages ceiling (~247 s incl.
+        // the guard call that precedes this on /api/analyze).
+        noThink: true, timeoutMs: 170_000 },
     ],
     {
       system: hasMacron ? SOLVER_SYSTEM_PROMPT_SCAN_ONLY : SOLVER_SYSTEM_PROMPT_RESTORE,
@@ -268,6 +350,7 @@ export async function runSolver(env, text, hasMacron) {
       timeoutMs: SOLVER_TIMEOUT_MS,
       maxTokens: SOLVER_MAX_TOKENS,
       temperature: 0.3,
+      transform: repairProseLineFragmentation,
       validate: validateAnalysis,
     }
   );
