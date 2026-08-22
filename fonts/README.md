@@ -16,7 +16,7 @@ No external font CDN is referenced at runtime.
   (input, verse lines, scansion, IPA). The subset deliberately retains the
   metrical symbols U+23D0–U+23D9 (⏑ ⏕ …), combining diacritics (U+0300–036F),
   and IPA ranges (U+0250–02FF) — Cardo covers every glyph the UI renders,
-  including the scansion symbols UI.md §1 reserves for New Athena Unicode.
+  including the scansion symbols and combining diacritics.
 - **Inter** = first entry of `--ds-font-sans-ui`: UI chrome only. It never
   renders classical text, so metrical symbols are not required in its subset.
 - New Athena Unicode / Gentium Plus remain in the token stacks as
