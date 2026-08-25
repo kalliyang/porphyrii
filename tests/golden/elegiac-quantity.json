@@ -1,0 +1,140 @@
+{
+  "_meta": {
+    "corpus": "Public-domain Latin elegiac verse",
+    "metre": "alternating dactylic hexameter and elegiac pentameter",
+    "method": "Project-authored elision and syllable annotations",
+    "comparison": "Derived heavy/light patterns from line-by-line Pedecerto comparison; no response payloads retained",
+    "divergences": "Listed tuples record known differences between project rules and the comparison output"
+  },
+  "lines": [
+    {
+      "ref": "Ov.Am.1.1.1",
+      "input": "Arma gravī numerō violentaque bella parābam",
+      "overrides": [],
+      "reference": "HLLHLLHLLHLLHLLHX",
+      "divergences": []
+    },
+    {
+      "ref": "Ov.Am.1.1.2",
+      "input": "ēdere, māteriā conveniente modīs.",
+      "overrides": [],
+      "reference": "HLLHLLHHLLHLLH",
+      "divergences": []
+    },
+    {
+      "ref": "Ov.Am.1.1.3",
+      "input": "pār erat īnferior versus; rīsisse Cupīdō",
+      "overrides": [],
+      "reference": "HLLHLLHHHHHLLHX",
+      "divergences": []
+    },
+    {
+      "ref": "Ov.Am.1.1.4",
+      "input": "dīcitur atqu(e) ūnum surripuisse pedem.",
+      "overrides": [],
+      "reference": "HLLHHHHLLHLLH",
+      "divergences": []
+    },
+    {
+      "ref": "Cat.85.1",
+      "input": "Ōd(ī) et amō. Quār(ē) id faciam fortasse requīris.",
+      "overrides": [],
+      "reference": "HLLHHHLLHHHLLHX",
+      "divergences": []
+    },
+    {
+      "ref": "Cat.85.2",
+      "input": "Nescio, sed fierī senti(ō) et excrucior.",
+      "overrides": [],
+      "reference": "HLLHLLHHLLHLLH",
+      "divergences": []
+    },
+    {
+      "ref": "Cat.101.1",
+      "input": "Multās per gentēs et multa per aequora vectus",
+      "overrides": [],
+      "reference": "HHHHHHHLLHLLHX",
+      "divergences": []
+    },
+    {
+      "ref": "Cat.101.2",
+      "input": "adveni(ō) hās miserās, frāter, ad īnferiās,",
+      "overrides": [],
+      "reference": "HLLHLLHHLLHLLH",
+      "divergences": [
+        {
+          "index": 8,
+          "ortho": "ter",
+          "derived": "heavy",
+          "expected": "L"
+        }
+      ]
+    },
+    {
+      "ref": "Cat.101.3",
+      "input": "ut tē postrēmō dōnārem mūnere mortis",
+      "overrides": [],
+      "reference": "HHHHHHHHHLLHX",
+      "divergences": []
+    },
+    {
+      "ref": "Cat.101.4",
+      "input": "et mūtam nēquīqu(am) adloquerer cinerem,",
+      "overrides": [],
+      "reference": "HHHHHHLLHLLH",
+      "divergences": []
+    },
+    {
+      "ref": "Cat.101.5",
+      "input": "quandoquidem fortūna mihī tēt(e) abstulit ipsum,",
+      "overrides": [],
+      "reference": "HLLHHHLLHHHLLHX",
+      "divergences": []
+    },
+    {
+      "ref": "Cat.101.6",
+      "input": "heu miser indignē frāter adēmpte mihī,",
+      "overrides": [],
+      "reference": "HLLHHHHLLHLLH",
+      "divergences": []
+    },
+    {
+      "ref": "Cat.101.7",
+      "input": "nunc tamen intere(ā) haec, prīscō quae mōre parentum",
+      "overrides": [],
+      "reference": "HLLHLLHHHHHLLHX",
+      "divergences": []
+    },
+    {
+      "ref": "Cat.101.8",
+      "input": "trādita sunt trīstī mūner(e) ad īnferiās,",
+      "overrides": [],
+      "reference": "HLLHHHHLLHLLH",
+      "divergences": []
+    },
+    {
+      "ref": "Cat.101.9",
+      "input": "accipe frāternō multum mānantia flētū,",
+      "overrides": [],
+      "reference": "HLLHHHHHHHLLHX",
+      "divergences": [],
+      "grace_notes": [
+        "Cross-word f + r/l is mute+liquid indeterminate: pe (@2, before frāternō) and a (@11, before flētū) agree with the reference at either weight; word-internal handling uses the standard mute set."
+      ]
+    },
+    {
+      "ref": "Cat.101.10",
+      "input": "atqu(e) in perpetuum, frāter, av(e) atque valē.",
+      "overrides": [],
+      "reference": "HHHLLHHLLHLLH",
+      "divergences": [
+        {
+          "index": 7,
+          "ortho": "ter",
+          "derived": "heavy",
+          "expected": "L"
+        }
+      ]
+    }
+  ]
+}

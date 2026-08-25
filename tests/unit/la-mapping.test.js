@@ -1,0 +1,148 @@
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { analyzeLatin, IPA_INVENTORY } from "../../core/latin-g2p.js";
+
+const mapping = JSON.parse(
+  readFileSync(
+    fileURLToPath(
+      new URL("../golden/la-mapping-v0.1.0.json", import.meta.url)
+    ),
+    "utf8"
+  )
+);
+const MAPPING_KEYS = new Set(mapping.rules.map((r) => r.ipa.normalize("NFC")));
+
+// Structural characters the driver understands (the driver contract): stress
+// marks, syllable dots, whitespace. Everything else must map.
+const STRUCTURAL = new Set(["ˈ", "ˌ", ".", " ", "\n", "\t"]);
+
+test("static: every emittable IPA symbol has a la.json rule", () => {
+  const all = [
+    ...IPA_INVENTORY.vowels,
+    ...IPA_INVENTORY.diphthongs,
+    ...IPA_INVENTORY.consonants,
+    ...IPA_INVENTORY.geminates,
+  ];
+  const missing = all.filter((s) => !MAPPING_KEYS.has(s.normalize("NFC")));
+  assert.deepEqual(missing, []);
+});
+
+test("static: mapping table kind field is present on every rule", () => {
+  for (const rule of mapping.rules) {
+    assert.ok(
+      ["vowel", "diphthong", "consonant"].includes(rule.kind),
+      `rule ${rule.ipa} lacks a valid kind`
+    );
+  }
+});
+
+/**
+ * Maximal-munch tokenizer over la.json keys (longest first), mirroring the
+ * driver's resolution. Returns the list of unmappable symbols with positions.
+ */
+function findUnmappable(ipa) {
+  const keys = [...MAPPING_KEYS].sort((a, b) => [...b].length - [...a].length);
+  const input = ipa.normalize("NFC");
+  const cps = [...input];
+  const failures = [];
+  let i = 0;
+  while (i < cps.length) {
+    const ch = cps[i];
+    if (STRUCTURAL.has(ch)) {
+      i++;
+      continue;
+    }
+    let matched = null;
+    for (const key of keys) {
+      const kcps = [...key];
+      if (cps.slice(i, i + kcps.length).join("") === key) {
+        matched = kcps.length;
+        break;
+      }
+    }
+    if (matched == null) {
+      failures.push({ symbol: ch, position: i });
+      i++;
+    } else {
+      i += matched;
+    }
+  }
+  return failures;
+}
+
+test("dynamic: golden IPA outputs tokenize entirely into la.json keys", () => {
+  const gold = JSON.parse(
+    readFileSync(
+      fileURLToPath(
+        new URL("../golden/aeneid-1-1-7.ipa-gold.json", import.meta.url)
+      ),
+      "utf8"
+    )
+  );
+  const texts = gold.lines.map((l) => l.input);
+  const overrides = gold.lines.flatMap((l, i) =>
+    (l.overrides ?? []).map((o) => ({ ...o, line: i }))
+  );
+  const result = analyzeLatin(texts.join("\n"), { overrides });
+  for (const line of result.lines) {
+    const failures = findUnmappable(line.ipa);
+    assert.deepEqual(
+      failures,
+      [],
+      `line ${line.index + 1} has unmappable symbols in: ${line.ipa}`
+    );
+  }
+});
+
+test("dynamic: exception-word outputs tokenize (cui/huic/suādeō/cōnsul)", () => {
+  const samples = [
+    "Cui dōnō lepidum novum libellum",
+    "suādentque cadentia sīdera somnos",
+    "Senātus haec intellegit, cōnsul videt; hic tamen vīvit.",
+    "Itaque cum sumus necessāriīs negōtiīs cūrīsque vacuī",
+    "indignē frāter adēmpte mihī",
+  ];
+  for (const text of samples) {
+    const { ipa } = analyzeLatin(text);
+    assert.deepEqual(findUnmappable(ipa), [], `unmappable in: ${ipa}`);
+  }
+});
+
+test("every consonant that can reach the geminate path stays mappable", () => {
+  // Synthetic adjacency probes for every consonant letter/digraph the
+  // tokenizer accepts. Lengthenable consonants must render the canonical
+  // Cː (a la.json row); everything else must render two separately
+  // mappable phonemes — the renderer must NEVER emit an unlisted Cː.
+  const lengthenable = [
+    ["abba", "bː"], ["acca", "kː"], ["adda", "dː"], ["affa", "fː"],
+    ["agga", "ɡː"], ["alla", "lː"], ["amma", "mː"], ["anna", "nː"],
+    ["appa", "pː"], ["arra", "rː"], ["assa", "sː"], ["atta", "tː"],
+  ];
+  const neverPaired = [
+    "avva", // w
+    "ajja", // j uses the doubled form j.j, never jː
+    "azzus", // z
+    "aququa", // kʷ
+    "aphpha", // pʰ
+    "aththa", // tʰ
+    "achcha", // kʰ
+  ];
+  for (const [input, gem] of lengthenable) {
+    const { ipa } = analyzeLatin(input);
+    assert.deepEqual(findUnmappable(ipa), [], `${input}: unmappable in ${ipa}`);
+    assert.ok(ipa.includes(gem), `${input}: expected ${gem} in ${ipa}`);
+  }
+  for (const input of neverPaired) {
+    const { ipa } = analyzeLatin(input);
+    assert.deepEqual(findUnmappable(ipa), [], `${input}: unmappable in ${ipa}`);
+    assert.ok(!ipa.includes("ː"), `${input}: unexpected length mark in ${ipa}`);
+  }
+  // the inventory's geminate list is exactly the lengthenable set above
+  assert.deepEqual(
+    [...IPA_INVENTORY.geminates].sort(),
+    lengthenable.map(([, g]) => g).sort()
+  );
+});

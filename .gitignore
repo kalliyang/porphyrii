@@ -1,0 +1,19 @@
+# Secrets — never commit
+.env
+.env.*
+*.env
+
+# Node / wrangler
+node_modules/
+.wrangler/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# E2E harness artifacts (tests/e2e/README.md)
+tests/e2e/mock-contract.json
+tests/e2e/mock-elision.json
+tests/e2e/shots/

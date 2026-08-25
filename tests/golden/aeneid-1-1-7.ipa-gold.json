@@ -1,0 +1,63 @@
+{
+  "_meta": {
+    "source": "Aeneid 1.1–7, using Chamberlain's CC BY 4.0 macronized text",
+    "relationship": "Machine-readable pronunciation fixture for deterministic tests",
+    "overrides": "Word selectors are numeric, zero-based indices."
+  },
+  "lines": [
+    {
+      "n": 1,
+      "input": "Arma virumque canō, Troiae quī prīmus ab ōrīs",
+      "overrides": [],
+      "gold_ipa_md": "ˈar.ma wɪ.ˈrʊm.kʷɛ ˈka.noː ˈtrɔj.jaɪ̯ kʷiː ˈpriː.mʊ.sa.ˈboː.riːs",
+      "expected_ipa": "ˈar.ma wɪ.ˈrʊm.kʷɛ ˈka.noː ˈtrɔj.jaɪ̯ kʷiː ˈpriː.mʊ.sa.ˈboː.riːs"
+    },
+    {
+      "n": 2,
+      "input": "Ītaliam, fātō profugus, Lāvīniaque vēnit",
+      "overrides": [
+        {
+          "word": 3,
+          "split": "lā-vī-nja-que"
+        }
+      ],
+      "gold_ipa_md": "iː.ˈta.lɪ.am ˈfaː.toː ˈprɔ.fʊ.ɡʊs laː.wiː.ˈnja.kʷɛ ˈweː.nɪt",
+      "expected_ipa": "iː.ˈta.lɪ.am ˈfaː.toː ˈprɔ.fʊ.ɡʊs laː.wiː.ˈnja.kʷɛ ˈweː.nɪt"
+    },
+    {
+      "n": 3,
+      "input": "lītora, mult(um) ill(e) et terrīs iactātus et altō",
+      "overrides": [],
+      "gold_ipa_md": "ˈliː.tɔ.ra ˈmʊlt ˈɪlː.ɛt ˈtɛrː.iːs jak.ˈtaː.tʊ.sɛ.ˈtal.toː",
+      "expected_ipa": "ˈliː.tɔ.ra ˈmʊlt ˈɪlː.ɛt ˈtɛrː.iːs jak.ˈtaː.tʊ.sɛ.ˈtal.toː"
+    },
+    {
+      "n": 4,
+      "input": "vī superum, saevae memorem Iūnōnis ob īram",
+      "overrides": [],
+      "gold_ipa_md": "ˈwiː ˈsʊ.pɛ.rʊm ˈsaɪ̯.waɪ̯ ˈmɛ.mɔ.rɛm juː.ˈnoː.nɪ.sɔ.ˈbiː.ram",
+      "expected_ipa": "ˈwiː ˈsʊ.pɛ.rʊm ˈsaɪ̯.waɪ̯ ˈmɛ.mɔ.rɛm juː.ˈnoː.nɪ.sɔ.ˈbiː.ram"
+    },
+    {
+      "n": 5,
+      "input": "multa quoqu(e) et bellō passus, dum conderet urbem",
+      "overrides": [],
+      "gold_ipa_md": "ˈmʊl.ta ˈkʷɔ.kʷɛt ˈbɛlː.oː ˈpasː.ʊs dʊm ˈkɔn.dɛ.rɛ.ˈtʊr.bɛm",
+      "expected_ipa": "ˈmʊl.ta ˈkʷɔ.kʷɛt ˈbɛlː.oː ˈpasː.ʊs dʊm ˈkɔn.dɛ.rɛ.ˈtʊr.bɛm"
+    },
+    {
+      "n": 6,
+      "input": "īnferretque deōs Latiō, genus unde Latīnum",
+      "overrides": [],
+      "gold_ipa_md": "iːn.fɛrː.ˈɛt.kʷɛ ˈdɛ.oːs ˈla.tɪ.oː ˈɡɛ.nʊ.ˈsʊn.dɛ la.ˈtiː.nʊm",
+      "expected_ipa": "iːn.fɛrː.ˈɛt.kʷɛ ˈdɛ.oːs ˈla.tɪ.oː ˈɡɛ.nʊ.ˈsʊn.dɛ la.ˈtiː.nʊm"
+    },
+    {
+      "n": 7,
+      "input": "Albānīque patrēs, atqu(e) altae moenia Rōmae",
+      "overrides": [],
+      "gold_ipa_md": "al.baː.ˈniː.kʷɛ ˈpa.treːs at.ˈkʷal.taɪ̯ ˈmoɪ̯.nɪ.a ˈroː.maɪ̯",
+      "expected_ipa": "al.baː.ˈniː.kʷɛ ˈpa.treːs at.ˈkʷal.taɪ̯ ˈmoɪ̯.nɪ.a ˈroː.maɪ̯"
+    }
+  ]
+}
