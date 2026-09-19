@@ -23,8 +23,25 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preload" href="fonts/Cardo-Regular.woff2" type="font/woff2" as="font" crossorigin>
   <link rel="preload" href="fonts/Inter-Variable.woff2" type="font/woff2" as="font" crossorigin>
-  <link rel="stylesheet" href="tokens.css">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="tokens.css?release=2026-09-19.1">
+  <link rel="stylesheet" href="style.css?release=2026-09-19.1">
+  <script type="importmap">
+  {"imports": {
+    "/app/audio.js": "/app/audio.js?release=2026-09-19.1",
+    "/app/db.js": "/app/db.js?release=2026-09-19.1",
+    "/app/ipa.js": "/app/ipa.js?release=2026-09-19.1",
+    "/app/scansion-view.js": "/app/scansion-view.js?release=2026-09-19.1",
+    "/app/turnstile.js": "/app/turnstile.js?release=2026-09-19.1",
+    "/services/text-integrity.js": "/services/text-integrity.js?release=2026-09-19.1",
+    "/core/latin-g2p.js": "/core/latin-g2p.js?release=2026-09-19.1",
+    "/core/latin-quantity.js": "/core/latin-quantity.js?release=2026-09-19.1",
+    "/core/latin-scansion.js": "/core/latin-scansion.js?release=2026-09-19.1",
+    "/core/syllable-overrides.js": "/core/syllable-overrides.js?release=2026-09-19.1",
+    "/core/espeak-wasm-driver.js": "/core/espeak-wasm-driver.js?release=2026-09-19.1",
+    "/vendor/espeak-ng/espeak-wasm-driver.js": "/vendor/espeak-ng/espeak-wasm-driver.js?release=2026-09-19.1",
+    "/vendor/espeak-ng/espeak-ng.js": "/vendor/espeak-ng/espeak-ng.js?release=2026-09-19.1"
+  }}
+  </script>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&amp;onload=__porTurnstileReady" async defer></script>
 </head>
 <body>
@@ -249,6 +266,6 @@
     <p class="noscript-note">Porphyrii needs JavaScript to analyze Latin text. Please enable JavaScript and reload.</p>
   </noscript>
 
-  <script type="module" src="main.js"></script>
+  <script type="module" src="main.js?release=2026-09-19.1"></script>
 </body>
 </html>

@@ -74,3 +74,32 @@ test("activation removes only obsolete Porphyrii caches", async () => {
   assert.ok(!keys.includes("precache-porphyrii-cache-6"));
   assert.ok(keys.includes("unrelated-cache"));
 });
+
+test("the new HTML escapes legacy module caches and its complete module graph works offline", async () => {
+  const html = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
+  const imports = JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]).imports;
+  const main = html.match(/<script type="module" src="([^"]+)"/)[1];
+  const styles = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((m) => m[1]);
+  const paths = [main, ...styles, ...Object.values(imports)];
+  const origin = "https://porphyrii.org";
+  const releases = new Set(paths.map((path) => new URL(path, origin).searchParams.get("release")));
+  assert.equal(releases.size, 1);
+  assert.ok(!releases.has(null));
+  const w = worker();
+  const legacy = await w.caches.open("precache-porphyrii-cache-6");
+  for (const path of paths) {
+    const url = new URL(path, origin);
+    await legacy.put(url.pathname, new Response("legacy-module"));
+    assert.equal(await legacy.match(path), undefined, "the old worker must miss the release URL");
+    if (!url.pathname.endsWith(".js")) continue;
+    const source = readFileSync(new URL(`../..${url.pathname}`, import.meta.url), "utf8");
+    for (const match of source.matchAll(/(?:from\s*|import\(\s*)["']([./][^"']+\.js)["']/g)) {
+      const imported = new URL(match[1], url).pathname;
+      assert.ok(imports[imported], `unversioned import: ${imported}`);
+    }
+  }
+  await w.lifecycle("install");
+  await w.lifecycle("activate");
+  w.setOffline(true);
+  for (const path of paths) assert.equal(await (await w.request(path)).text(), "installed-asset", path);
+});

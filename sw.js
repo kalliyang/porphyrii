@@ -1,6 +1,7 @@
 
 
-const VERSION = "porphyrii-cache-7";
+const VERSION = "porphyrii-cache-8";
+const RELEASE = "2026-09-19.1";
 const PRECACHE_NAME = `precache-${VERSION}`;
 const RUNTIME_NAME = `runtime-${VERSION}`;
 
@@ -37,6 +38,10 @@ const PRECACHE = [
   "/vendor/espeak-ng/espeak-ng.data",
   "/vendor/espeak-ng/la.json",
 ];
+// Distinct request URLs escape earlier workers' unversioned module caches.
+// Keep these aliases precached so the versioned HTML also works offline.
+const RELEASE_ASSETS = PRECACHE.filter((path) => /\.(js|css)$/.test(path))
+  .map((path) => `${path}?release=${RELEASE}`);
 
 self.addEventListener("install", (event) => {
   // cache: "reload" bypasses the browser HTTP cache so an application update
@@ -46,7 +51,7 @@ self.addEventListener("install", (event) => {
     caches
       .open(PRECACHE_NAME)
       .then((cache) =>
-        cache.addAll(PRECACHE.map((u) => new Request(u, { cache: "reload" })))
+        cache.addAll([...PRECACHE, ...RELEASE_ASSETS].map((u) => new Request(u, { cache: "reload" })))
       )
       .then(() => self.skipWaiting())
   );

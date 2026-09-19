@@ -30,6 +30,12 @@ analysis calls, run `node tests/e2e/serve-fixtures.mjs` and open
 `http://127.0.0.1:8789`. Test a verse, a long prose paragraph, slow playback, stop/replay,
 and an unresolved line. The fixture server binds only to the loopback interface.
 
+Frontend releases use versioned stylesheet and module URLs, including the complete
+module graph through the HTML import map. When frontend code changes, advance that
+release identifier and `sw.js`'s cache version together. The worker precaches both
+URL forms for offline use; the versioned form also bypasses older workers that
+cached unversioned modules. The service-worker tests check this upgrade boundary.
+
 The backend uses a Latin-language guard, followed by restoration. Its primary route
 uses Gemini Interactions with `store: false` and JSON Schema; DeepSeek Chat Completions
 provides a JSON-mode fallback. Model settings remain server-side. Both routes undergo
