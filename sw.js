@@ -1,7 +1,7 @@
 
 
-const VERSION = "porphyrii-cache-8";
-const RELEASE = "2026-09-19.1";
+const VERSION = "porphyrii-cache-9";
+const RELEASE = "2026-09-19.2";
 const PRECACHE_NAME = `precache-${VERSION}`;
 const RUNTIME_NAME = `runtime-${VERSION}`;
 
@@ -102,7 +102,9 @@ self.addEventListener("fetch", (event) => {
   if (event.request.mode === "navigate") {
     // HTML and its module graph must come from the same installed release.
     event.respondWith(
-      caches.open(PRECACHE_NAME).then((cache) => cache.match("/index.html"))
+      // Pages redirects /index.html to /. A cached redirected response is
+      // invalid for a navigation request whose redirect mode is manual.
+      caches.open(PRECACHE_NAME).then((cache) => cache.match("/"))
         .then((hit) => hit ?? fetch(event.request))
     );
     return;

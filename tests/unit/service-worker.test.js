@@ -7,6 +7,12 @@ function worker() {
   const origin = "https://porphyrii.org";
   const listeners = {};
   const stores = new Map();
+  const storedResponse = (body, redirected = false) => {
+    const response = new Response(body);
+    Object.defineProperty(response, "redirected", { value: redirected });
+    response.clone = () => storedResponse(body, redirected);
+    return response;
+  };
   const key = (request) => new URL(typeof request === "string" ? request : request.url, origin).href;
   const cache = (name) => {
     if (!stores.has(name)) stores.set(name, new Map());
@@ -19,7 +25,7 @@ function worker() {
           assert.equal(request.cache, "reload");
           const path = new URL(request.url).pathname;
           assert.ok(existsSync(new URL(`../..${path === "/" ? "/index.html" : path}`, import.meta.url)), `missing precache asset: ${path}`);
-          entries.set(key(request), new Response(path === "/index.html" ? "installed-html" : "installed-asset"));
+          entries.set(key(request), storedResponse(["/", "/index.html"].includes(path) ? "installed-html" : "installed-asset", path === "/index.html"));
         }
       },
     };
@@ -54,7 +60,9 @@ function worker() {
 test("an installed app never mixes newer network HTML with its cached modules", async () => {
   const w = worker();
   await w.lifecycle("install");
-  assert.equal(await (await w.request("/", { mode: "navigate" })).text(), "installed-html");
+  const navigation = await w.request("/", { mode: "navigate" });
+  assert.equal(navigation.redirected, false, "Pages' redirected index response must not be replayed as navigation");
+  assert.equal(await navigation.text(), "installed-html");
   assert.equal(await (await w.request("/core/latin-scansion.js")).text(), "installed-asset");
   w.setOffline(true);
   assert.equal(await (await w.request("/", { mode: "navigate" })).text(), "installed-html");
