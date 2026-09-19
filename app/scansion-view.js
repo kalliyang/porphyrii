@@ -8,6 +8,7 @@ export const SHORT_MARK = "⏑"; // ⏑ brevis (U+23D1)
 const KNOWN_METER_LABELS = {
   dactylic_hexameter: "Dactylic hexameter",
   elegiac_couplet: "Elegiac couplet",
+  elegiac_pentameter: "Elegiac pentameter",
   prose: "Prose",
   unknown: "Meter unknown",
 };
@@ -31,21 +32,21 @@ export function confidenceNotice(confidence) {
 }
 
 
-export function buildScansionView(contract) {
+export function buildScansionView(contract, validation = null) {
   const meter = contract?.meter ?? "unknown";
   const confidence = contract?.meter_confidence ?? "low";
   const lines = (contract?.scansion ?? []).map((entry) => ({
     line: entry.line,
     text: entry.text,
     note: entry.note ?? null,
-    feet: (entry.feet ?? []).map((foot, fi) => ({
+    feet: (validation?.lines?.some((line) => line.line === entry.line && !line.ok) ? [] : entry.feet ?? []).map((foot, fi) => ({
       type: Array.isArray(entry.foot_types) ? entry.foot_types[fi] ?? null : null,
       syllables: foot.map((syl) => ({
         text: syl.s,
-        display: syl.elided ? `(${syl.s})` : syl.s,
+        display: syl.elided ? `(${syl.s.replace(/[()]/g, "")})` : syl.s,
         elided: syl.elided === true,
         long: syl.q === "long",
-        mark: syl.q === "long" ? LONG_MARK : SHORT_MARK,
+        mark: syl.elided ? "" : syl.anceps ? "x" : syl.q === "long" ? LONG_MARK : SHORT_MARK,
       })),
     })),
   }));
@@ -76,7 +77,10 @@ export function validatorNotices(validation) {
       notices.push({ line: line.line, message: parts.join("; ") });
     }
     if (line.note) {
-      notices.push({ line: line.line, message: line.note });
+      const message = /override transport|fail-closed|solver|syllabification/.test(line.note)
+        ? "This line could not be checked. Run the analysis again or compare it with your textbook."
+        : line.note;
+      notices.push({ line: line.line, message });
     }
   }
   return notices;

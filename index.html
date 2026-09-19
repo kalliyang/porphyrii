@@ -85,7 +85,7 @@
           <div id="validator-warnings" class="alerts"></div>
           <div id="scansion-body" class="scansion-body"></div>
           <footer class="card-note">
-            AI-assisted scansion — verify against your textbook.
+            Scansion uses restored vowel quantities — verify against your textbook.
           </footer>
         </article>
 
@@ -109,6 +109,14 @@
               <h3 id="recitation-heading">Recitation</h3>
             </header>
             <div class="recitation-controls">
+              <label class="reading-speed" for="reading-speed">Reading speed
+                <select id="reading-speed">
+                  <option value="80">Very slow</option>
+                  <option value="110" selected>Slow</option>
+                  <option value="140">Moderate</option>
+                  <option value="175">Original</option>
+                </select>
+              </label>
               <button id="play-btn" class="btn btn-primary" type="button">
                 <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
                   <path d="M8 5v14l11-7z"></path>
@@ -117,6 +125,7 @@
               </button>
               <span id="audio-status" class="audio-status" role="status" aria-live="polite"></span>
             </div>
+            <p id="recitation-note" class="card-note" hidden></p>
             <label class="ipa-toggle" for="ipa-toggle">
               <input type="checkbox" id="ipa-toggle">
               Show IPA transcription
@@ -205,6 +214,7 @@
           approximation</strong>, not an academic reconstruction performance. Known
           simplifications: word-final <span lang="la">-m</span> is pronounced as [m] rather
           than nasalized, and elided syllables (shown in parentheses) are not read aloud.
+          Some Greek names require readings outside the current rule set.
         </p>
 
         <h3>AI-assisted results</h3>

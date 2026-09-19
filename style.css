@@ -347,6 +347,8 @@ a:hover {
 }
 .result-side {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--ds-space-4);
 }
 
@@ -500,7 +502,28 @@ a:hover {
   margin: 0 0 var(--ds-space-1);
   font-family: var(--ds-font-serif-classical);
   font-size: var(--ds-text-body);
-  white-space: nowrap;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.reading-speed {
+  display: grid;
+  gap: var(--ds-space-1);
+  font-family: var(--ds-font-sans-ui);
+}
+.source-line {
+  font-family: var(--ds-font-serif-classical);
+  font-size: var(--ds-text-body);
+  overflow-wrap: anywhere;
+}
+.reading-speed select {
+  min-height: var(--ds-touch-min, 2.75rem);
+  font: inherit;
+  font-size: 1rem;
+  color: var(--ds-color-text-primary);
+  background: var(--ds-color-surface-base);
+  border: 1px solid var(--ds-color-text-primary);
+  border-radius: var(--ds-radius-sm);
+  padding: var(--ds-space-2);
 }
 .ipa-line:last-child {
   margin-block-end: 0;

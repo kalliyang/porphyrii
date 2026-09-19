@@ -27,6 +27,7 @@ export class TurnstileManager {
     this.widgetId = window.turnstile.render(this.container, {
       sitekey: this.sitekey,
       size: "invisible",
+      execution: "execute",
       "expired-callback": () => this._reset(),
       "timeout-callback": () => this._reset(),
       "error-callback": (code) => {

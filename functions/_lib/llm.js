@@ -7,24 +7,51 @@ import {
   wrapUserText,
   retryNudge,
 } from "./prompts.js";
-import { validateAnalysis } from "./contract.js";
+import { GUARD_SCHEMA, RESTORATION_SCHEMA, validateRestoration } from "./restoration.js";
+import { resolveScansion } from "../../core/latin-scansion.js";
 import { normalizeLatin } from "../../services/text-integrity.js";
 
-const GUARD_TIMEOUT_MS = 20_000;
-const SOLVER_TIMEOUT_MS = 90_000;
-// Output limits include model reasoning overhead. The fallback solver disables
-// optional reasoning so requests remain within the configured timeout.
+const GUARD_TIMEOUT_MS = 10_000;
+const SOLVER_TIMEOUT_MS = 45_000;
+// Output limits include reasoning overhead. Guards stay light; restoration uses
+// bounded reasoning and shares one deadline with any validation repair.
 const GUARD_MAX_TOKENS = 4_096;
-const SOLVER_MAX_TOKENS = 32_768;
+const SOLVER_MAX_TOKENS = 12_288;
+
+export const MODEL_DEFAULTS = Object.freeze({
+  GUARD_MODEL: "gemini-3.5-flash-lite",
+  SOLVER_MODEL: "gemini-3.8-flash",
+  FALLBACK_GUARD_MODEL: "deepseek-flash",
+  FALLBACK_SOLVER_MODEL: "deepseek-flash",
+});
 
 class TransportError extends Error {}
+
+async function readEnvelope(response) {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("missing response body");
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let text = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    bytes += value.byteLength;
+    if (bytes > 1_048_576) {
+      await reader.cancel();
+      throw new Error("response body exceeds limit");
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return JSON.parse(text + decoder.decode());
+}
 
 // ---------------------------------------------------------------------------
 // Provider calls
 // ---------------------------------------------------------------------------
 
-async function callGemini({ key, model, system, user, timeoutMs, maxTokens, temperature }) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+export async function callGemini({ key, model, system, user, timeoutMs, maxTokens, schema, thinkingLevel = "low" }) {
+  const url = "https://generativelanguage.googleapis.com/v1beta/interactions";
   let resp;
   try {
     resp = await fetch(url, {
@@ -34,12 +61,16 @@ async function callGemini({ key, model, system, user, timeoutMs, maxTokens, temp
         "x-goog-api-key": key,
       },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: "user", parts: [{ text: user }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          maxOutputTokens: maxTokens,
-          temperature,
+        model,
+        system_instruction: system,
+        input: user,
+        store: false,
+        stream: false,
+        response_format: { type: "text", mime_type: "application/json", schema },
+        generation_config: {
+          max_output_tokens: maxTokens,
+          thinking_level: thinkingLevel,
+          thinking_summaries: "none",
         },
       }),
       signal: AbortSignal.timeout(timeoutMs),
@@ -52,24 +83,22 @@ async function callGemini({ key, model, system, user, timeoutMs, maxTokens, temp
   }
   let data;
   try {
-    data = await resp.json();
+    data = await readEnvelope(resp);
   } catch (e) {
     // A body-read abort is a timeout rather than a parse failure.
     const aborted = e && (e.name === "TimeoutError" || e.name === "AbortError");
     throw new TransportError(aborted ? "gemini response body timed out" : "gemini returned non-JSON envelope");
   }
-  const block = data?.promptFeedback?.blockReason;
-  if (block) throw new TransportError(`gemini blocked prompt: ${block}`);
-  const parts = data?.candidates?.[0]?.content?.parts ?? [];
-  const text = parts.map((p) => p?.text ?? "").join("");
+  if (data.status !== "completed") throw new TransportError(`gemini response status=${data.status ?? "missing"}`);
+  const outputs = (data.steps ?? []).filter((step) => step.type === "model_output");
+  const text = (outputs.at(-1)?.content ?? []).filter((part) => part.type === "text").map((part) => part.text ?? "").join("");
   if (!text.trim()) {
-    const finish = data?.candidates?.[0]?.finishReason ?? "unknown";
-    throw new TransportError(`gemini empty content (finishReason=${finish})`);
+    throw new TransportError("gemini returned no final text");
   }
   return text;
 }
 
-async function callDeepSeek({ key, model, system, user, timeoutMs, maxTokens, temperature, noThink }) {
+export async function callDeepSeek({ key, model, system, user, timeoutMs, maxTokens, temperature, thinkingLevel }) {
   let resp;
   try {
     resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -88,9 +117,8 @@ async function callDeepSeek({ key, model, system, user, timeoutMs, maxTokens, te
         max_tokens: maxTokens,
         temperature,
         stream: false,
-        // Solver only: thinking disabled (see header note). Undefined for
-        // the guard — the API default (enabled/high) stays in effect there.
-        ...(noThink ? { thinking: { type: "disabled" } } : {}),
+        thinking: { type: thinkingLevel ? "enabled" : "disabled" },
+        ...(thinkingLevel ? { reasoning_effort: "low" } : {}),
       }),
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -102,12 +130,13 @@ async function callDeepSeek({ key, model, system, user, timeoutMs, maxTokens, te
   }
   let data;
   try {
-    data = await resp.json();
+    data = await readEnvelope(resp);
   } catch (e) {
     const aborted = e && (e.name === "TimeoutError" || e.name === "AbortError");
     throw new TransportError(aborted ? "deepseek response body timed out" : "deepseek returned non-JSON envelope");
   }
   const text = data?.choices?.[0]?.message?.content ?? "";
+  if (data?.choices?.[0]?.finish_reason !== "stop") throw new TransportError("deepseek returned an incomplete response");
   if (!text.trim()) throw new TransportError("deepseek empty content");
   return text;
 }
@@ -172,54 +201,68 @@ function extractJson(raw) {
 /**
  * Two-provider chain with one validation retry per provider.
  *
- * @param {Array} providers [{ name, key, model, call, noThink?, timeoutMs? }]
- *   noThink/timeoutMs are per-provider overrides passed through to call
- *   (DeepSeek solver: thinking disabled + a bigger wall-clock budget).
+ * @param {Array} providers [{ name, key, model, call, timeoutMs? }]
+ *   timeoutMs optionally overrides the per-call limit within the shared deadline.
  * @param {object} job { system, user, timeoutMs, maxTokens, temperature, validate }
  * @returns {Promise<{ ok: boolean, data?: object, provider?: string,
  *   model?: string, reason?: string, attempts: Array }>}
  */
-async function runChain(providers, job) {
+export async function runChain(providers, job) {
   const attempts = [];
+  const deadline = Date.now() + (job.totalTimeoutMs ?? job.timeoutMs * 2);
   for (const p of providers) {
     if (!p.key || !p.model) {
       attempts.push({ provider: p.name, skipped: "not configured" });
       continue;
     }
     let nudge = "";
+    let best = null;
     for (let attempt = 1; attempt <= 2; attempt++) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return best
+        ? { ok: true, data: best.data, provider: p.name, model: p.model, attempts }
+        : { ok: false, reason: "timeout", attempts };
       try {
         const raw = await p.call({
           key: p.key,
           model: p.model,
           system: job.system,
           user: job.user + nudge,
-          timeoutMs: p.timeoutMs ?? job.timeoutMs,
+          timeoutMs: Math.min(p.timeoutMs ?? job.timeoutMs, remaining),
           maxTokens: job.maxTokens,
           temperature: job.temperature,
-          noThink: p.noThink,
+          schema: job.schema,
+          thinkingLevel: job.thinkingLevel,
         });
         let parsed;
         try {
           parsed = extractJson(raw);
         } catch (e) {
-          attempts.push({ provider: p.name, attempt, error: "parse", detail: e.message });
+          attempts.push({ provider: p.name, attempt, error: "parse" });
           nudge = retryNudge(["response was not a parseable JSON object"]);
-          if (attempt === 2) return { ok: false, reason: "validation", attempts };
+          if (attempt === 2) break;
           continue;
         }
         // Optional deterministic pre-validation repair (e.g. prose line
         // defragmentation); the candidate — not the raw parse — is what gets
         // validated AND returned, so repaired output never bypasses the
         // validator.
-        const candidate = job.transform ? job.transform(parsed) : parsed;
+        let candidate = job.transform ? job.transform(parsed) : parsed;
         const v = job.validate(candidate);
         if (v.ok) {
-          return { ok: true, data: candidate, provider: p.name, model: p.model, attempts };
+          if (best && job.reconcile) candidate = job.reconcile(best.data, candidate);
+          const review = job.review?.(candidate) ?? { score: 0, errors: [] };
+          if (!best || review.score > best.score) best = { data: candidate, score: review.score };
+          if (attempt === 1 && review.errors.length) {
+            nudge = retryNudge(review.errors);
+            attempts.push({ provider: p.name, attempt, error: "quantity-review" });
+            continue;
+          }
+          return { ok: true, data: best.data, provider: p.name, model: p.model, attempts };
         }
         attempts.push({ provider: p.name, attempt, error: "validation", detail: v.errors });
         nudge = retryNudge(v.errors);
-        if (attempt === 2) return { ok: false, reason: "validation", attempts };
+        if (attempt === 2) break;
       } catch (e) {
         if (e instanceof TransportError) {
           attempts.push({ provider: p.name, attempt, error: "transport", detail: e.message });
@@ -228,8 +271,10 @@ async function runChain(providers, job) {
         throw e;
       }
     }
+    // A failed optional quantity review must not discard a valid partial result.
+    if (best) return { ok: true, data: best.data, provider: p.name, model: p.model, attempts };
   }
-  return { ok: false, reason: "transport", attempts };
+  return { ok: false, reason: "exhausted", attempts };
 }
 
 // ---------------------------------------------------------------------------
@@ -256,8 +301,8 @@ function guardValidator(d) {
 export async function runGuard(env, text) {
   const r = await runChain(
     [
-      { name: "gemini", key: env.GEMINI_API_KEY, model: env.GUARD_MODEL, call: callGemini },
-      { name: "deepseek", key: env.DEEPSEEK_API_KEY, model: env.FALLBACK_GUARD_MODEL, call: callDeepSeek },
+      { name: "gemini", key: env.GEMINI_API_KEY, model: env.GUARD_MODEL ?? MODEL_DEFAULTS.GUARD_MODEL, call: callGemini },
+      { name: "deepseek", key: env.DEEPSEEK_API_KEY, model: env.FALLBACK_GUARD_MODEL ?? MODEL_DEFAULTS.FALLBACK_GUARD_MODEL, call: callDeepSeek },
     ],
     {
       system: GUARD_SYSTEM_PROMPT,
@@ -265,6 +310,8 @@ export async function runGuard(env, text) {
       timeoutMs: GUARD_TIMEOUT_MS,
       maxTokens: GUARD_MAX_TOKENS,
       temperature: 0,
+      schema: GUARD_SCHEMA,
+      totalTimeoutMs: 25_000,
       validate: guardValidator,
     }
   );
@@ -286,13 +333,8 @@ export async function runGuard(env, text) {
 export async function runSolver(env, text, hasMacron) {
   const r = await runChain(
     [
-      { name: "gemini", key: env.GEMINI_API_KEY, model: env.SOLVER_MODEL, call: callGemini },
-      { name: "deepseek", key: env.DEEPSEEK_API_KEY, model: env.FALLBACK_SOLVER_MODEL, call: callDeepSeek,
-        // Thinking disabled (header note). ~6 s/verse-line no-think, so a
-        // max-size input (~25 lines / 2,000 chars) needs ~150 s; 170 s
-        // leaves headroom under the empirical Pages ceiling (~247 s incl.
-        // the guard call that precedes this on /api/analyze).
-        noThink: true, timeoutMs: 170_000 },
+      { name: "gemini", key: env.GEMINI_API_KEY, model: env.SOLVER_MODEL ?? MODEL_DEFAULTS.SOLVER_MODEL, call: callGemini },
+      { name: "deepseek", key: env.DEEPSEEK_API_KEY, model: env.FALLBACK_SOLVER_MODEL ?? MODEL_DEFAULTS.FALLBACK_SOLVER_MODEL, call: callDeepSeek },
     ],
     {
       system: hasMacron ? SOLVER_SYSTEM_PROMPT_SCAN_ONLY : SOLVER_SYSTEM_PROMPT_RESTORE,
@@ -300,8 +342,29 @@ export async function runSolver(env, text, hasMacron) {
       timeoutMs: SOLVER_TIMEOUT_MS,
       maxTokens: SOLVER_MAX_TOKENS,
       temperature: 0.3,
-      transform: repairProseLineFragmentation,
-      validate: validateAnalysis,
+      schema: RESTORATION_SCHEMA,
+      totalTimeoutMs: 100_000,
+      validate: (data) => validateRestoration(data, text, hasMacron),
+      reconcile: (first, reviewed) => {
+        const checked = resolveScansion({ ...first, allow_quantity_variants: true });
+        const oldLines = first.scansion_text.split(/\r\n|\r|\n/);
+        const newLines = reviewed.scansion_text.split(/\r\n|\r|\n/).filter((line) => normalizeLatin(line));
+        let index = 0;
+        const merged = oldLines.map((line) => {
+          if (!normalizeLatin(line)) return line;
+          const i = index++;
+          return checked.scansion[i].status === "unresolved" && normalizeLatin(line) === normalizeLatin(newLines[i] ?? "") ? newLines[i] : line;
+        });
+        return { ...first, scansion_text: merged.join("\n") };
+      },
+      review: hasMacron ? undefined : (data) => {
+        const result = resolveScansion({ ...data, allow_quantity_variants: true });
+        const unresolved = result.scansion.filter((line) => line.status === "unresolved");
+        return {
+          score: result.scansion.filter((line) => line.status === "resolved").length,
+          errors: unresolved.length ? [`No dactylic pattern fits the restored quantities on lines ${unresolved.map((line) => line.line).join(", ")}. Recheck lexical quantities and legitimate poetic variants in their context, including variable final vowels and genitives in -ius. Correct only defensible readings; do not invent lengths to force a fit. If uncertain, retain the text and explain the uncertainty in grammar_notes`] : [],
+        };
+      },
     }
   );
   if (!r.ok) {
@@ -309,5 +372,5 @@ export async function runSolver(env, text, hasMacron) {
     return { ok: false };
   }
   console.log(`[porphyrii] solver ok via ${r.provider} (${r.model})`);
-  return { ok: true, data: r.data, provider: r.provider, model: r.model };
+  return { ok: true, data: resolveScansion({ ...r.data, allow_quantity_variants: !hasMacron }), provider: r.provider, model: r.model };
 }

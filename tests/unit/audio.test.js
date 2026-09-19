@@ -6,13 +6,49 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AudioController } from "../../app/audio.js";
+import { AudioController, DEFAULT_READING_RATE } from "../../app/audio.js";
 
 function trace(c) {
   const seen = [];
   c.onStateChange((s) => seen.push(s));
   return seen;
 }
+
+test("reading speed defaults to slow synthesis and passes explicit choices", async () => {
+  const rates = [];
+  const controller = new AudioController({ loadDriver: async () => ({ playIPA: async (_, options) => rates.push(options.rate), stop() {} }) });
+  await controller.play("ˈar.ma");
+  await controller.play("ˈar.ma", { rate: 80 });
+  assert.deepEqual(rates, [DEFAULT_READING_RATE, 80]);
+});
+
+test("stopping during driver loading prevents delayed playback", async () => {
+  let finishLoading;
+  let played = false;
+  const controller = new AudioController({ loadDriver: () => new Promise((resolve) => { finishLoading = resolve; }) });
+  const pending = controller.play("ˈar.ma");
+  controller.stop();
+  finishLoading({ playIPA: async () => { played = true; }, stop() {} });
+  await pending;
+  assert.equal(played, false);
+});
+
+test("completion of a stopped recording cannot reset a newer playback", async () => {
+  const finish = [];
+  const controller = new AudioController({ loadDriver: async () => ({ playIPA: () => new Promise((resolve) => finish.push(resolve)), stop() {} }) });
+  await controller.load();
+  const first = controller.play("first");
+  await Promise.resolve();
+  controller.stop();
+  const second = controller.play("second");
+  await Promise.resolve();
+  finish[0]();
+  await first;
+  assert.equal(controller.state, "playing");
+  finish[1]();
+  await second;
+  assert.equal(controller.state, "ready");
+});
 
 test("initial state is unloaded", () => {
   assert.equal(new AudioController().state, "unloaded");

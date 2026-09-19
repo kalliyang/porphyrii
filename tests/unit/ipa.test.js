@@ -51,8 +51,8 @@ test("deriveIpa: elision parens + elided flags are honored", () => {
         line: 1,
         text: "mult(um) ill(e) et",
         feet: [
-          [syl("mul", "long"), syl("tum", "long", true)],
-          [syl("il", "long"), syl("le", "long", true)],
+          [syl("mult", "long"), syl("um", "long", true)],
+          [syl("ill", "long"), syl("e", "long", true)],
           [syl("et", "long")],
         ],
       },
@@ -81,7 +81,7 @@ test("deriveIpa: prose contract (empty feet) still transcribes", () => {
   assert.ok(r.lines[0].ipa.length > 0);
 });
 
-test("deriveIpa: un-reconstructable solver letters degrade to a problem note, not a crash", () => {
+test("deriveIpa: un-reconstructable solver letters block playback without throwing", () => {
   const contract = {
     scansion_text: "Arma virumque canō",
     scansion: [
@@ -94,7 +94,8 @@ test("deriveIpa: un-reconstructable solver letters degrade to a problem note, no
     meter: "unknown",
   };
   const r = deriveIpa(contract);
-  assert.equal(r.ok, true); // engine still transcribes the text itself
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.lines, []);
   assert.equal(r.problems.length, 1);
   assert.equal(r.problems[0].line, 1);
 });

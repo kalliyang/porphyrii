@@ -1,10 +1,13 @@
 
 
 import { normalizeLatin } from "../../services/text-integrity.js";
+import { contractSyllableOverrides } from "../../core/syllable-overrides.js";
+import { validFootStructure, expectedLineMeter } from "../../core/latin-scansion.js";
 
 const KNOWN_METERS = new Set([
   "dactylic_hexameter",
   "elegiac_couplet",
+  "elegiac_pentameter",
   "prose",
   "unknown",
 ]);
@@ -152,5 +155,18 @@ export function crossCheckContract(d) {
 export function validateAnalysis(d) {
   const schema = validateContract(d);
   if (!schema.ok) return schema;
-  return crossCheckContract(d);
+  const cross = crossCheckContract(d);
+  if (!cross.ok) return cross;
+  const errors = [];
+  d.scansion.forEach((line, index) => {
+    if (line.line !== index + 1) errors.push(`line ${index + 1}: invalid line number`);
+    if (!validFootStructure(line.feet, expectedLineMeter(d.meter, index))) errors.push(`line ${index + 1}: invalid metrical feet`);
+    for (const syllable of line.feet.flat()) {
+      if (/[()]/.test(syllable.s)) errors.push(`line ${index + 1}: use complementary letters for elided syllables`);
+    }
+  });
+  try {
+    if (contractSyllableOverrides(d).problems.length) errors.push("syllable spelling cannot be aligned to the text");
+  } catch { errors.push("syllable spelling cannot be read"); }
+  return { ok: errors.length === 0, errors };
 }

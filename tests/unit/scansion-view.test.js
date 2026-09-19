@@ -190,7 +190,7 @@ test("validatorNotices: syllable mismatches become per-line warnings", () => {
   assert.match(notices[0].message, /“que” scanned long but the restored macrons make it short/);
 });
 
-test("validatorNotices: structural notes (count mismatch, transport) pass through", () => {
+test("validatorNotices: structural failures use readable language", () => {
   const validation = {
     ok: false,
     meter: "dactylic_hexameter",
@@ -209,5 +209,6 @@ test("validatorNotices: structural notes (count mismatch, transport) pass throug
   const notices = validatorNotices(validation);
   assert.equal(notices.length, 1);
   assert.equal(notices[0].line, 3);
-  assert.match(notices[0].message, /review manually/);
+  assert.match(notices[0].message, /could not be checked/);
+  assert.doesNotMatch(notices[0].message, /solver|transport|fail-closed/);
 });

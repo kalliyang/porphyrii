@@ -1,6 +1,6 @@
 
 
-const VERSION = "porphyrii-cache-6";
+const VERSION = "porphyrii-cache-7";
 const PRECACHE_NAME = `precache-${VERSION}`;
 const RUNTIME_NAME = `runtime-${VERSION}`;
 
@@ -18,6 +18,7 @@ const PRECACHE = [
   "/services/text-integrity.js",
   "/core/latin-g2p.js",
   "/core/latin-quantity.js",
+  "/core/latin-scansion.js",
   "/core/syllable-overrides.js",
   "/manifest.webmanifest",
   "/icons/icon.svg",
@@ -58,7 +59,7 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((k) => k !== PRECACHE_NAME && k !== RUNTIME_NAME)
+            .filter((k) => /^(precache|runtime)-porphyrii-cache-/.test(k) && k !== PRECACHE_NAME && k !== RUNTIME_NAME)
             .map((k) => caches.delete(k))
         )
       )
@@ -94,27 +95,23 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
   if (event.request.mode === "navigate") {
+    // HTML and its module graph must come from the same installed release.
     event.respondWith(
-      fetch(event.request)
-        .then((resp) => {
-          const copy = resp.clone();
-          caches.open(RUNTIME_NAME).then((c) => c.put("/index.html", copy));
-          return resp;
-        })
-        .catch(() => caches.match("/index.html"))
+      caches.open(PRECACHE_NAME).then((cache) => cache.match("/index.html"))
+        .then((hit) => hit ?? fetch(event.request))
     );
     return;
   }
 
   // Static assets: cache-first, refill from network when missing.
   event.respondWith(
-    caches.match(event.request).then(
+    Promise.all([PRECACHE_NAME, RUNTIME_NAME].map((name) => caches.open(name).then((cache) => cache.match(event.request)))).then(([precache, runtime]) => precache ?? runtime).then(
       (hit) =>
         hit ??
         fetch(event.request).then((resp) => {
           if (resp.ok) {
             const copy = resp.clone();
-            caches.open(RUNTIME_NAME).then((c) => c.put(event.request, copy));
+            event.waitUntil(caches.open(RUNTIME_NAME).then((c) => c.put(event.request, copy)));
           }
           return resp;
         })

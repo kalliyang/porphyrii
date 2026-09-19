@@ -15,6 +15,7 @@
  */
 
 export const AUDIO_STATES = ["unloaded", "loading", "ready", "playing", "load-error"];
+export const DEFAULT_READING_RATE = 110;
 
 export class AudioController {
   /**
@@ -28,6 +29,7 @@ export class AudioController {
     this.driver = null;
     this.error = null;
     this._listeners = new Set();
+    this._playGeneration = 0;
     this._loadDriver =
       deps.loadDriver ??
       (() =>
@@ -72,24 +74,29 @@ export class AudioController {
    * Play an IPA string. Loads the driver on first use (the recitation behavior).
    * @param {string} ipa
    */
-  async play(ipa) {
+  async play(ipa, options = {}) {
     if (this.state === "playing") {
       this.stop();
       return;
     }
+    if (this.state === "loading") return;
+    const generation = ++this._playGeneration;
     const loaded = await this.load();
-    if (!loaded) return;
+    if (!loaded || generation !== this._playGeneration) return;
     this._set("playing");
     try {
-      await this.driver.playIPA(ipa);
+      const rate = Number(options.rate ?? DEFAULT_READING_RATE);
+      if (!Number.isFinite(rate) || rate < 80 || rate > 175) throw new Error("Reading rate must be between 80 and 175.");
+      await this.driver.playIPA(ipa, { ...options, rate });
     } catch (err) {
-      this._set("load-error", err);
+      if (generation === this._playGeneration) this._set("load-error", err);
       return;
     }
-    this._set("ready");
+    if (generation === this._playGeneration) this._set("ready");
   }
 
   stop() {
+    this._playGeneration++;
     try {
       this.driver?.stop?.();
     } finally {

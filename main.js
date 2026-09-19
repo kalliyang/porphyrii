@@ -63,8 +63,10 @@ const els = {
   translationBody: $("translation-body"),
   grammarBody: $("grammar-body"),
   playBtn: $("play-btn"),
+  readingSpeed: $("reading-speed"),
   playLabel: $("play-label"),
   audioStatus: $("audio-status"),
+  recitationNote: $("recitation-note"),
   ipaToggle: $("ipa-toggle"),
   ipaBody: $("ipa-body"),
   historyDetails: $("history-details"),
@@ -385,6 +387,7 @@ let currentIpa = null; // cached deriveIpa() result for the visible result
 const audio = new AudioController();
 
 function renderResult(contract, { input, save }) {
+  audio.stop();
   currentResult = { contract, input };
   currentIpa = null;
   els.ipaToggle.checked = false;
@@ -446,27 +449,24 @@ function renderResult(contract, { input, save }) {
   }
 
   let notices = [];
+  let validation = null;
   try {
-    const validation = validateScansion(contract);
+    validation = validateScansion(contract);
     notices = validatorNotices(validation);
   } catch {
-    notices = []; // validator failure must never block the result
+    validation = { lines: (contract.scansion ?? []).map((line) => ({ line: line.line, ok: false })) };
+    notices = [{ line: 1, message: "This analysis could not be checked. Please run it again." }];
   }
   if (notices.length > 0) {
-    const box = showAlert(els.validatorWarnings, "warning", {
+    showAlert(els.validatorWarnings, "warning", {
       title: "Consistency check",
       message:
-        "The syllable-quantity validator found points where the scansion disagrees with the restored macrons. Review these lines against your textbook:",
+        "Some lines need review. Their notes appear below; unconfirmed metrical marks are hidden.",
     });
-    const list = el("ul", { className: "diff-list" });
-    for (const n of notices) {
-      list.appendChild(el("li", { text: `Line ${n.line}: ${n.message}` }));
-    }
-    box.appendChild(list);
   }
 
   // --- scansion card ---
-  const view = buildScansionView(contract);
+  const view = buildScansionView(contract, validation);
   els.meterBadge.textContent = view.meterLabel;
   if (view.confidenceNotice) {
     els.confidenceNote.hidden = false;
@@ -486,6 +486,11 @@ function renderResult(contract, { input, save }) {
   renderPlainText(els.grammarBody, contract.grammar_notes);
 
   // --- recitation ---
+  if (els.recitationNote) {
+    const unscanned = ensureIpa()?.unscanned;
+    els.recitationNote.hidden = !unscanned;
+    els.recitationNote.textContent = unscanned ? "Unconfirmed lines are read as written, without inferred elision." : "";
+  }
   renderAudioState(audio.state);
 
   els.resultSection.hidden = false;
@@ -501,10 +506,11 @@ function renderScansionBody(view, noticeByLine) {
     if (view.prose || line.feet.length === 0) {
       wrap.appendChild(el("p", { className: "prose-line", text: line.text, attrs: { lang: "la" } }));
     } else {
+      wrap.appendChild(el("p", { className: "source-line", text: line.text, attrs: { lang: "la" } }));
       const head = el("div");
       head.appendChild(el("span", { className: "line-no", text: String(line.line), attrs: { "aria-hidden": "true" } }));
       const pattern = line.feet
-        .map((f) => f.syllables.map((s) => s.mark).join(" "))
+        .map((f) => f.syllables.filter((s) => !s.elided).map((s) => s.mark).join(" "))
         .join(" | ");
       const feet = el("span", {
         className: "feet",
@@ -530,6 +536,7 @@ function renderScansionBody(view, noticeByLine) {
       wrap.appendChild(el("p", { className: "line-note", text: line.note }));
     }
     for (const msg of noticeByLine.get(line.line) ?? []) {
+      if (msg === line.note) continue;
       wrap.appendChild(el("p", { className: "line-note", text: `Consistency check: ${msg}` }));
     }
     els.scansionBody.appendChild(wrap);
@@ -616,10 +623,15 @@ els.playBtn.addEventListener("click", () => {
   if (!currentResult) return;
   const ipa = ensureIpa();
   if (!ipa || !ipa.ok) {
-    els.audioStatus.textContent = "Pronunciation is unavailable for this result.";
+    els.audioStatus.textContent = ipa?.error ?? "Pronunciation is unavailable for this result.";
     return;
   }
-  void audio.play(ipa.lines.map((l) => l.ipa).join("\n"));
+  void audio.play(ipa.lines.map((l) => l.ipa).join("\n"), { rate: Number(els.readingSpeed?.value ?? 110) });
+});
+
+els.readingSpeed?.addEventListener("change", () => {
+  audio.stop();
+  els.audioStatus.textContent = "Speed updated. Press Play to read from the beginning.";
 });
 
 
@@ -747,8 +759,13 @@ els.input.addEventListener("input", updateCounter);
 // ---------------------------------------------------------------------------
 
 if ("serviceWorker" in navigator) {
+  let controlled = Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (controlled && !els.input.value.trim() && !currentResult) window.location.reload();
+    controlled = true;
+  });
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
+    navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {
       /* SW is progressive enhancement — the app works without it */
     });
   });

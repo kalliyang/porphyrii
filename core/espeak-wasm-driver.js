@@ -42,7 +42,7 @@ const IS_NODE =
   !!process.versions.node;
 
 /** The vendor accepts at most 500 IPA characters; keep a safety margin. */
-const MAX_CHUNK_CHARS = 450;
+const MAX_CHUNK_CHARS = 120;
 
 async function artifactURL(name) {
   const url = new URL(name, VENDOR_BASE);
@@ -175,12 +175,14 @@ function playPcm(pcm, sampleRate) {
  * @param {(pcm:Int16Array, sampleRate:number) => Promise<void>} stages.play
  * @param {() => boolean} stages.isStopped
  */
-export async function playChunks(chunks, { synthesize, play, isStopped }) {
-  for (const chunk of chunks) {
+export async function playChunks(chunks, { synthesize, play, isStopped, pause }) {
+  for (let index = 0; index < chunks.length; index++) {
+    const chunk = chunks[index];
     if (isStopped()) return false;
     const { pcm, sampleRate } = await synthesize(chunk);
     if (isStopped()) return false;
     await play(pcm, sampleRate);
+    if (pause && index + 1 < chunks.length && !isStopped()) await pause();
   }
   return true;
 }
@@ -202,6 +204,7 @@ export async function playIPA(ipa, options = {}) {
     synthesize: (chunk) => vendor.synthesize(chunk, options),
     play: playPcm,
     isStopped: () => gen !== _playGen,
+    pause: () => new Promise((resolve) => setTimeout(resolve, 350)),
   });
 }
 

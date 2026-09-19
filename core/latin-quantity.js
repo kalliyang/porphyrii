@@ -2,6 +2,7 @@
 
 import { analyzeLatin } from "./latin-g2p.js";
 import { contractSyllableOverrides } from "./syllable-overrides.js";
+import { SCANSION_VERSION, resolveScansion, validFootStructure, expectedLineMeter } from "./latin-scansion.js";
 
 // ============================================================================
 //  Weight-sequence derivation (shared syllabification, second exit)
@@ -211,6 +212,15 @@ export function validateScansion(contract, options = {}) {
   if (meter === "prose") {
     return { ok: true, meter, prose: true, lines: [], mismatchCount: 0 };
   }
+  if (contract.scansion_version === SCANSION_VERSION) {
+    const checked = resolveScansion(contract);
+    const lines = checked.scansion.map((line, i) => {
+      const stored = contract.scansion?.[i];
+      const same = stored?.line === line.line && stored?.status === line.status && JSON.stringify(stored?.feet) === JSON.stringify(line.feet);
+      return { line: line.line, ok: same && line.status === "resolved", mismatches: [], note: !same ? "This saved analysis needs to be run again." : line.status !== "resolved" ? line.note : null };
+    });
+    return { ok: lines.every((line) => line.ok), meter, prose: false, lines, mismatchCount: 0 };
+  }
   // Explicit caller overrides bypass the transport entirely — its problems
   // must not block lines the caller takes responsibility for.
   const useTransport = options.overrides == null;
@@ -252,7 +262,11 @@ export function validateScansion(contract, options = {}) {
         note: "solver line number out of range for scansion_text",
       };
     }
-    return validateLine(derivedLine, solverLine);
+    const result = validateLine(derivedLine, solverLine);
+    if (!validFootStructure(solverLine.feet ?? [], expectedLineMeter(meter, idx))) {
+      return { ...result, ok: false, note: "The foot divisions do not fit this metre. Run the analysis again." };
+    }
+    return result;
   });
   const mismatchCount = lines.reduce((a, l) => a + l.mismatches.length, 0);
   return {

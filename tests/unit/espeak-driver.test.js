@@ -38,7 +38,7 @@ test("chunkIpa: one chunk per line, blank lines dropped", () => {
 });
 
 test("chunkIpa: lines within the limit stay whole even if the total exceeds it", () => {
-  const line = "x".repeat(300);
+  const line = "x".repeat(100);
   assert.deepEqual(chunkIpa(`${line}\n${line}`), [line, line]);
 });
 
