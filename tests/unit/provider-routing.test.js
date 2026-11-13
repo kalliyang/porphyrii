@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { callGemini, callDeepSeek, runChain, runSolver } from "../../functions/_lib/llm.js";
+import { callGemini, callDeepSeek, runChain, runGuard, runSolver, MODEL_DEFAULTS } from "../../functions/_lib/llm.js";
 import { GUARD_SCHEMA, validateRestoration } from "../../functions/_lib/restoration.js";
 
 const raw = {
@@ -15,7 +15,7 @@ const envelope = (text, status = "completed") => new Response(JSON.stringify({ s
   { type: "thought", content: [{ type: "text", text: "not the answer either" }] },
   { type: "model_output", content: [{ type: "text", text }] },
 ] }));
-const args = { key: "test", model: "gemini-3.8-flash", system: "JSON only", user: "Latin", timeoutMs: 1000, maxTokens: 4096, schema: GUARD_SCHEMA };
+const args = { key: "test", model: "gemini-4-hydrogen", system: "JSON only", user: "Latin", timeoutMs: 1000, maxTokens: 4096, schema: GUARD_SCHEMA };
 
 test("Gemini uses stateless Interactions, a schema, explicit thinking, and final output only", async (t) => {
   t.mock.method(globalThis, "fetch", async (url, request) => {
@@ -23,11 +23,14 @@ test("Gemini uses stateless Interactions, a schema, explicit thinking, and final
     const body = JSON.parse(request.body);
     assert.equal(body.store, false);
     assert.equal(body.generation_config.thinking_level, "low");
+    for (const parameter of ["temperature", "top_p", "top_k"]) {
+      assert.equal(Object.hasOwn(body.generation_config, parameter), false);
+    }
     assert.deepEqual(body.response_format.schema, GUARD_SCHEMA);
     assert.equal(body.previous_interaction_id, undefined);
     return envelope('{"is_latin":true}');
   });
-  assert.equal(await callGemini(args), '{"is_latin":true}');
+  assert.equal(await callGemini({ ...args, temperature: 0.3 }), '{"is_latin":true}');
 });
 
 test("Gemini incomplete output and DeepSeek length-truncated output are rejected", async (t) => {
@@ -42,6 +45,7 @@ test("DeepSeek disables reasoning explicitly for short synchronous requests", as
     assert.equal(url, "https://api.deepseek.com/v1/chat/completions");
     const body = JSON.parse(request.body);
     assert.deepEqual(body.thinking, { type: "disabled" });
+    assert.equal(Object.hasOwn(body, "reasoning_effort"), false);
     assert.deepEqual(body.response_format, { type: "json_object" });
     return new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "{}" } }] }));
   });
@@ -59,10 +63,101 @@ test("two invalid primary responses continue to fallback, with bounded retries",
 });
 
 test("solver computes feet after validating restored text", async (t) => {
-  t.mock.method(globalThis, "fetch", async () => envelope(JSON.stringify(raw)));
+  t.mock.method(globalThis, "fetch", async (url, request) => {
+    assert.equal(url, "https://generativelanguage.googleapis.com/v1beta/interactions");
+    const body = JSON.parse(request.body);
+    assert.equal(body.model, "gemini-4-hydrogen");
+    assert.equal(body.generation_config.thinking_level, MODEL_DEFAULTS.SOLVER_THINKING_LEVEL);
+    return envelope(JSON.stringify(raw));
+  });
   const result = await runSolver({ GEMINI_API_KEY: "test" }, raw.original_text_cleaned, false);
   assert.equal(result.ok, true);
   assert.equal(result.data.scansion[0].pattern, "HLL|HLL|HH|HH|HLL|HX");
+});
+
+test("guard preserves its lightweight model and explicitly selects its thinking level", async (t) => {
+  const bodies = [];
+  t.mock.method(globalThis, "fetch", async (url, request) => {
+    assert.equal(url, "https://generativelanguage.googleapis.com/v1beta/interactions");
+    bodies.push(JSON.parse(request.body));
+    return envelope('{"is_latin":true,"reject_reason":null}');
+  });
+  assert.equal((await runGuard({ GEMINI_API_KEY: "test" }, "Arma virumque cano")).isLatin, true);
+  assert.equal(bodies[0].model, "gemini-3.5-flash-lite");
+  assert.equal(bodies[0].generation_config.thinking_level, "low");
+  await runGuard({ GEMINI_API_KEY: "test", GUARD_THINKING_LEVEL: "medium" }, "Arma virumque cano");
+  assert.equal(bodies[1].generation_config.thinking_level, "medium");
+});
+
+test("solver passes low and medium runtime overrides to Gemini", async (t) => {
+  for (const level of ["low", "medium"]) {
+    await t.test(level, async (t) => {
+      t.mock.method(globalThis, "fetch", async (url, request) => {
+        const body = JSON.parse(request.body);
+        assert.equal(body.model, "gemini-4-hydrogen");
+        assert.equal(body.generation_config.thinking_level, level);
+        return envelope(JSON.stringify(raw));
+      });
+      const result = await runSolver({ GEMINI_API_KEY: "test", SOLVER_THINKING_LEVEL: level }, raw.original_text_cleaned, false);
+      assert.equal(result.ok, true);
+    });
+  }
+});
+
+test("provider thinking overrides take precedence over job thinking", async () => {
+  for (const override of [undefined, "low"]) {
+    let received;
+    const result = await runChain([
+      { name: "primary", key: "test", model: "test", thinkingLevel: override, call: async (args) => {
+        received = args.thinkingLevel;
+        return "{}";
+      } },
+    ], { thinkingLevel: "medium", timeoutMs: 1000, user: "Latin", validate: () => ({ ok: true }) });
+    assert.equal(result.ok, true);
+    assert.equal(received, override ?? "medium");
+  }
+});
+
+test("solver keeps fallback thinking disabled after a missing Gemini key or HTTP failure", async (t) => {
+  for (const primary of ["missing", "http-503"]) {
+    await t.test(primary, async (t) => {
+      const urls = [];
+      t.mock.method(globalThis, "fetch", async (url, request) => {
+        urls.push(url);
+        const body = JSON.parse(request.body);
+        if (url === "https://generativelanguage.googleapis.com/v1beta/interactions") {
+          assert.equal(body.generation_config.thinking_level, "medium");
+          return new Response("unavailable", { status: 503 });
+        }
+        assert.equal(url, "https://api.deepseek.com/v1/chat/completions");
+        assert.equal(body.model, "deepseek-flash");
+        assert.deepEqual(body.thinking, { type: "disabled" });
+        assert.equal(Object.hasOwn(body, "reasoning_effort"), false);
+        return new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(raw) } }] }));
+      });
+      const result = await runSolver({
+        DEEPSEEK_API_KEY: "test", SOLVER_THINKING_LEVEL: "medium",
+        ...(primary === "http-503" ? { GEMINI_API_KEY: "test" } : {}),
+      }, raw.original_text_cleaned, false);
+      assert.equal(result.ok, true);
+      assert.equal(result.provider, "deepseek");
+      assert.equal(urls.length, primary === "http-503" ? 2 : 1);
+    });
+  }
+});
+
+test("guard thinking overrides never enable fallback reasoning", async (t) => {
+  t.mock.method(globalThis, "fetch", async (url, request) => {
+    assert.equal(url, "https://api.deepseek.com/v1/chat/completions");
+    const body = JSON.parse(request.body);
+    assert.equal(body.model, "deepseek-flash");
+    assert.deepEqual(body.thinking, { type: "disabled" });
+    assert.equal(Object.hasOwn(body, "reasoning_effort"), false);
+    return new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: '{"is_latin":true,"reject_reason":null}' } }] }));
+  });
+  const result = await runGuard({ DEEPSEEK_API_KEY: "test", GUARD_THINKING_LEVEL: "medium" }, "Arma virumque cano");
+  assert.equal(result.isLatin, true);
+  assert.equal(result.provider, "deepseek");
 });
 
 test("restoration rejects changed letters, changed quantity marks, and lost lines", () => {

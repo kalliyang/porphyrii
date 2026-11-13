@@ -20,7 +20,9 @@ const SOLVER_MAX_TOKENS = 12_288;
 
 export const MODEL_DEFAULTS = Object.freeze({
   GUARD_MODEL: "gemini-3.5-flash-lite",
-  SOLVER_MODEL: "gemini-3.8-flash",
+  GUARD_THINKING_LEVEL: "low",
+  SOLVER_MODEL: "gemini-4-hydrogen",
+  SOLVER_THINKING_LEVEL: "low",
   FALLBACK_GUARD_MODEL: "deepseek-flash",
   FALLBACK_SOLVER_MODEL: "deepseek-flash",
 });
@@ -201,7 +203,7 @@ function extractJson(raw) {
 /**
  * Two-provider chain with one validation retry per provider.
  *
- * @param {Array} providers [{ name, key, model, call, timeoutMs? }]
+ * @param {Array} providers [{ name, key, model, call, timeoutMs?, thinkingLevel? }]
  *   timeoutMs optionally overrides the per-call limit within the shared deadline.
  * @param {object} job { system, user, timeoutMs, maxTokens, temperature, validate }
  * @returns {Promise<{ ok: boolean, data?: object, provider?: string,
@@ -232,7 +234,7 @@ export async function runChain(providers, job) {
           maxTokens: job.maxTokens,
           temperature: job.temperature,
           schema: job.schema,
-          thinkingLevel: job.thinkingLevel,
+          thinkingLevel: p.thinkingLevel ?? job.thinkingLevel,
         });
         let parsed;
         try {
@@ -301,7 +303,12 @@ function guardValidator(d) {
 export async function runGuard(env, text) {
   const r = await runChain(
     [
-      { name: "gemini", key: env.GEMINI_API_KEY, model: env.GUARD_MODEL ?? MODEL_DEFAULTS.GUARD_MODEL, call: callGemini },
+      {
+        name: "gemini", key: env.GEMINI_API_KEY,
+        model: env.GUARD_MODEL ?? MODEL_DEFAULTS.GUARD_MODEL,
+        thinkingLevel: env.GUARD_THINKING_LEVEL ?? MODEL_DEFAULTS.GUARD_THINKING_LEVEL,
+        call: callGemini,
+      },
       { name: "deepseek", key: env.DEEPSEEK_API_KEY, model: env.FALLBACK_GUARD_MODEL ?? MODEL_DEFAULTS.FALLBACK_GUARD_MODEL, call: callDeepSeek },
     ],
     {
@@ -333,7 +340,12 @@ export async function runGuard(env, text) {
 export async function runSolver(env, text, hasMacron) {
   const r = await runChain(
     [
-      { name: "gemini", key: env.GEMINI_API_KEY, model: env.SOLVER_MODEL ?? MODEL_DEFAULTS.SOLVER_MODEL, call: callGemini },
+      {
+        name: "gemini", key: env.GEMINI_API_KEY,
+        model: env.SOLVER_MODEL ?? MODEL_DEFAULTS.SOLVER_MODEL,
+        thinkingLevel: env.SOLVER_THINKING_LEVEL ?? MODEL_DEFAULTS.SOLVER_THINKING_LEVEL,
+        call: callGemini,
+      },
       { name: "deepseek", key: env.DEEPSEEK_API_KEY, model: env.FALLBACK_SOLVER_MODEL ?? MODEL_DEFAULTS.FALLBACK_SOLVER_MODEL, call: callDeepSeek },
     ],
     {
