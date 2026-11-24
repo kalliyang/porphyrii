@@ -30,6 +30,7 @@ export async function verifyTurnstile(secret, token, ip) {
       body: form,
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
+    if (!resp.ok) throw new Error("Verification service unavailable");
     data = await resp.json();
   } catch {
     return {

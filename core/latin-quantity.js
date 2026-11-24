@@ -219,7 +219,7 @@ export function validateScansion(contract, options = {}) {
       const same = stored?.line === line.line && stored?.status === line.status && JSON.stringify(stored?.feet) === JSON.stringify(line.feet);
       return { line: line.line, ok: same && line.status === "resolved", mismatches: [], note: !same ? "This saved analysis needs to be run again." : line.status !== "resolved" ? line.note : null };
     });
-    return { ok: lines.every((line) => line.ok), meter, prose: false, lines, mismatchCount: 0 };
+    return { ok: lines.every((line) => line.ok), meter, prose: false, lines, mismatchCount: 0, checked };
   }
   // Explicit caller overrides bypass the transport entirely — its problems
   // must not block lines the caller takes responsibility for.

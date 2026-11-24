@@ -8,12 +8,8 @@ const QUANTITY_MARK_RE =
 const CONTROL_CHAR_RE =
   /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/;
 
-/**
- * Latin-script letters: Basic Latin letters, Latin-1 Supplement letters,
- * Latin Extended-A/B, Latin Extended Additional (covers āēīōūȳ and rare
- * epigraphic forms).
- */
-const LATIN_LETTER_RE = /[A-Za-zÀ-ɏḀ-ỿ]/g;
+const LATIN_LETTER_RE = /\p{Script=Latin}/gu;
+const SUPPORTED_LETTER = /^[A-Za-zĀāĒēĪīŌōŪūȲȳĂăĔĕĬĭŎŏŬŭ]$/u;
 
 export const MAX_INPUT_CHARS = 2000;
 
@@ -47,8 +43,15 @@ export function precheck(text) {
       reason: "The text contains unsupported control characters. Please paste plain text.",
     };
   }
-  const letters = text.match(/\p{L}/gu) ?? [];
-  const latinLetters = text.match(LATIN_LETTER_RE) ?? [];
+  const normalized = text.normalize("NFC");
+  if (/[æœ]/iu.test(normalized)) {
+    return { ok: false, reason: "Please write ae and oe as two letters instead of the ligatures æ and œ." };
+  }
+  const latinLetters = normalized.match(LATIN_LETTER_RE) ?? [];
+  if (/\p{M}/u.test(normalized) || latinLetters.some((ch) => !SUPPORTED_LETTER.test(ch))) {
+    return { ok: false, reason: "Unsupported diacritics found. Please use plain Latin letters and standard macrons or breves (ā ē ī ō ū ȳ, ă ĕ ĭ ŏ ŭ) without accents or diaereses." };
+  }
+  const letters = normalized.match(/\p{L}/gu) ?? [];
   if (latinLetters.length === 0) {
     return {
       ok: false,

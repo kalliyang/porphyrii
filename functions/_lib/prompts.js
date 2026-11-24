@@ -26,7 +26,7 @@ Return only a JSON object with these fields:
 language: "la"
 spelling_corrected: boolean
 correction_reason: string or null
-original_text_cleaned: the input before quantity restoration
+original_text_cleaned: the exact input text before any spelling correction or quantity restoration
 scansion_text: the complete restored text, with exactly the input's line breaks
 meter: dactylic_hexameter | elegiac_couplet | elegiac_pentameter | prose |
        unknown | other:hendecasyllabic | other:iambic_senarius

@@ -204,3 +204,36 @@ test("oversized provider envelopes fail before parsing or application rendering"
   t.mock.method(globalThis, "fetch", async () => new Response("x".repeat(1_048_577)));
   await assert.rejects(callGemini(args), /non-JSON envelope/);
 });
+
+test("quantity review keeps updated notes and translation at an unchanged score", async (t) => {
+  const partial = { ...raw, original_text_cleaned: "mala", scansion_text: "māla" };
+  const reviewed = { ...partial, grammar_notes: "Uncertain. ```latin\narma\n```", translation: "Apples." };
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async () => envelope(JSON.stringify(calls++ ? reviewed : partial)));
+  const result = await runSolver({ GEMINI_API_KEY: "test" }, "mala", false);
+  assert.equal(calls, 2);
+  assert.equal(result.data.grammar_notes, reviewed.grammar_notes);
+  assert.equal(result.data.translation, reviewed.translation);
+});
+
+test("declared spelling corrections may occur in either returned text representation", () => {
+  const input = "Armaa";
+  for (const cleaned of [input, "Arma"]) {
+    const correction = { ...raw, spelling_corrected: true, correction_reason: "Extra final a.",
+      original_text_cleaned: cleaned, scansion_text: "Arma" };
+    assert.ok(validateRestoration(correction, input, false).ok);
+    assert.equal(validateRestoration({ ...correction, correction_reason: "a".repeat(2001) }, input, false).ok, false);
+    assert.equal(validateRestoration({ ...correction, original_text_cleaned: "Ar\nma" }, input, false).ok, false);
+  }
+});
+
+test("aborting a provider request stops both retry and fallback", async (t) => {
+  const controller = new AbortController();
+  const calls = t.mock.method(globalThis, "fetch", async (_url, { signal }) => {
+    controller.abort();
+    signal.throwIfAborted();
+  });
+  await assert.rejects(runGuard({ GEMINI_API_KEY: "test", DEEPSEEK_API_KEY: "test" }, "arma", controller.signal),
+    { name: "AbortError" });
+  assert.equal(calls.mock.callCount(), 1);
+});

@@ -81,3 +81,8 @@ ambiguous/unresolved behavior, legacy-history failures, provider envelopes, and
 playback cancellation. Metrical patterns in fixed reference fixtures are not a
 claim of accuracy on arbitrary input. Live model quality and browser playback
 must be checked on representative examples when the integration changes.
+
+Input accepts plain Latin letters and standard macrons and breves
+(ā ē ī ō ū ȳ, ă ĕ ĭ ŏ ŭ). Write ae and oe separately and omit modern accents
+and diaereses. The bounded search includes elided monosyllables joined to the
+following vowel, preserving the source letters in the displayed feet.

@@ -1,7 +1,7 @@
 
 
-const VERSION = "porphyrii-cache-9";
-const RELEASE = "2026-09-19.2";
+const VERSION = "porphyrii-cache-10";
+const RELEASE = "2026-11-24.1";
 const PRECACHE_NAME = `precache-${VERSION}`;
 const RUNTIME_NAME = `runtime-${VERSION}`;
 
@@ -121,6 +121,13 @@ self.addEventListener("fetch", (event) => {
             event.waitUntil(caches.open(RUNTIME_NAME).then((c) => c.put(event.request, copy)));
           }
           return resp;
+        }, async (error) => {
+          if (url.searchParams.has("release")) {
+            const cache = await caches.open(PRECACHE_NAME);
+            const fallback = await cache.match(url.pathname);
+            if (fallback) return fallback;
+          }
+          throw error;
         })
     )
   );

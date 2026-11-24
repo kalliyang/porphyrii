@@ -140,9 +140,16 @@ function currentTheme() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+function updateThemeLabel() {
+  const target = currentTheme() === "dark" ? "light" : "dark";
+  els.themeToggle.setAttribute("aria-label", `Switch to ${target} theme`);
+}
+updateThemeLabel();
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", updateThemeLabel);
 els.themeToggle.addEventListener("click", () => {
   const next = currentTheme() === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
+  updateThemeLabel();
   try {
     localStorage.setItem("ds-theme", next);
   } catch {
@@ -167,14 +174,14 @@ window.__porTurnstileReady = () => {
 };
 
 /** Fresh single-use token, or a user-facing Error. */
-async function humanToken() {
+async function humanToken(signal) {
   if (turnstileFailed || (turnstile === null && typeof window.turnstile === "undefined")) {
     throw new Error(
       "Human verification could not load (a content blocker may be blocking Cloudflare). Please allow challenges.cloudflare.com and reload."
     );
   }
   if (turnstile === null) window.__porTurnstileReady();
-  return turnstile.getToken();
+  return turnstile.getToken({ signal });
 }
 
 // ---------------------------------------------------------------------------
@@ -277,7 +284,9 @@ async function onAnalyze() {
     return;
   }
 
-  abortController = new AbortController();
+  const controller = new AbortController();
+  abortController = controller;
+  const { signal } = controller;
 
   // ---- validation request ----
   flowState = "validating";
@@ -285,16 +294,19 @@ async function onAnalyze() {
   setStage(STAGE_VALIDATING, true);
   let token1;
   try {
-    token1 = await humanToken();
+    token1 = await humanToken(signal);
+    if (signal.aborted) return;
   } catch (err) {
+    if (signal.aborted) return;
     showFlowError(String(err.message ?? err));
     return;
   }
   let v;
   try {
-    v = await postJson("/api/validate", { text, turnstile_token: token1 }, abortController.signal);
+    v = await postJson("/api/validate", { text, turnstile_token: token1 }, signal);
+    if (signal.aborted) return;
   } catch (err) {
-    if (err?.name === "AbortError") return resetToIdle();
+    if (signal.aborted) return;
     showFlowError(offlineMessage());
     return;
   }
@@ -304,16 +316,19 @@ async function onAnalyze() {
     scheduleAnalyzingStages();
     let token2;
     try {
-      token2 = await humanToken();
+      token2 = await humanToken(signal);
+      if (signal.aborted) return;
     } catch (err) {
+      if (signal.aborted) return;
       showFlowError(String(err.message ?? err));
       return;
     }
     let a;
     try {
-      a = await postJson("/api/analyze", { text, turnstile_token: token2 }, abortController.signal);
+      a = await postJson("/api/analyze", { text, turnstile_token: token2 }, signal);
+      if (signal.aborted) return;
     } catch (err) {
-      if (err?.name === "AbortError") return resetToIdle();
+      if (signal.aborted) return;
       showFlowError(offlineMessage());
       return;
     }
@@ -329,7 +344,7 @@ async function onAnalyze() {
   }
 
   // validate did not pass
-  if (v.status === 400 && v.data?.reject_reason) {
+  if ((v.status === 400 || v.status === 413) && v.data?.reject_reason) {
     flowState = "rejected";
     setBusy(false);
     showAlert(els.formAlerts, "error", {
@@ -412,7 +427,7 @@ function renderResult(contract, { input, save }) {
     showAlert(els.resultAlerts, "warning", {
       title: "Spelling corrected",
       message: contract.correction_reason ?? "The model corrected what it read as a spelling error.",
-      diff: integrity?.checkB?.diff ?? undefined,
+      diff: integrity?.checkB?.diff ?? integrity?.checkA?.diff ?? undefined,
     });
   } else if (integrity && integrity.status === "fail") {
     const box = showAlert(els.resultAlerts, "error", {
@@ -452,6 +467,7 @@ function renderResult(contract, { input, save }) {
   let validation = null;
   try {
     validation = validateScansion(contract);
+    currentResult.checked = validation.checked;
     notices = validatorNotices(validation);
   } catch {
     validation = { lines: (contract.scansion ?? []).map((line) => ({ line: line.line, ok: false })) };
@@ -514,7 +530,7 @@ function renderScansionBody(view, noticeByLine) {
         .join(" | ");
       const feet = el("span", {
         className: "feet",
-        attrs: { "aria-label": `Line ${line.line} metrical pattern: ${pattern}` },
+        attrs: { role: "group", "aria-label": `Line ${line.line} metrical pattern: ${pattern}` },
       });
       for (const foot of line.feet) {
         const footEl = el("span", {
@@ -546,7 +562,7 @@ function renderScansionBody(view, noticeByLine) {
 
 function ensureIpa() {
   if (currentIpa === null && currentResult) {
-    currentIpa = deriveIpa(currentResult.contract);
+    currentIpa = deriveIpa(currentResult.contract, currentResult.checked);
   }
   return currentIpa;
 }
@@ -667,6 +683,11 @@ function historyItemNode(record) {
     el("span", { className: "history-meta", text: `${stamp} · ${record.meter.replace(/_/g, " ")}` })
   );
   open.addEventListener("click", () => {
+    if (flowState === "validating" || flowState === "analyzing") {
+      abortController?.abort();
+      resetToIdle();
+      clear(els.formAlerts);
+    }
     els.input.value = record.input;
     updateCounter();
     renderResult(record.result, { input: record.input, save: false });
@@ -677,7 +698,12 @@ function historyItemNode(record) {
     attrs: { type: "button", "aria-label": `Delete history entry “${record.snippet || "untitled"}”` },
   });
   del.addEventListener("click", async () => {
-    await deleteRecord(record.id);
+    try {
+      await deleteRecord(record.id);
+    } catch {
+      showAlert(els.formAlerts, "error", { title: "History unavailable", message: "Could not delete this saved analysis. Please try again." });
+      return;
+    }
     await refreshHistory();
   });
   item.appendChild(open);
@@ -707,12 +733,20 @@ async function refreshHistory() {
 // About & Privacy overlay
 // ---------------------------------------------------------------------------
 
+function setBackgroundInert(inert) {
+  for (const node of [...document.querySelectorAll(".site-header, #main, .site-footer"), offlineBanner]) {
+    node.inert = inert;
+  }
+}
 function openAbout() {
+  setBackgroundInert(true);
   els.aboutView.hidden = false;
   document.body.style.overflow = "hidden";
+  els.aboutView.scrollTop = 0;
   els.aboutClose.focus();
 }
 function closeAbout() {
+  setBackgroundInert(false);
   els.aboutView.hidden = true;
   document.body.style.overflow = "";
   els.aboutOpen.focus();
@@ -720,7 +754,16 @@ function closeAbout() {
 els.aboutOpen.addEventListener("click", openAbout);
 els.aboutClose.addEventListener("click", closeAbout);
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !els.aboutView.hidden) closeAbout();
+  if (els.aboutView.hidden) return;
+  if (e.key === "Escape") closeAbout();
+  if (e.key !== "Tab") return;
+  const stops = [...els.aboutView.querySelectorAll('a[href], button:not(:disabled), [tabindex]:not([tabindex="-1"])')]
+    .filter((node) => !node.matches(":disabled") && node.tabIndex >= 0 && node.getClientRects().length);
+  const first = stops[0], last = stops.at(-1);
+  if (e.shiftKey && document.activeElement === first || !e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    (e.shiftKey ? last : first)?.focus();
+  }
 });
 
 // ---------------------------------------------------------------------------

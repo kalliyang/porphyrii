@@ -111,3 +111,15 @@ test("the new HTML escapes legacy module caches and its complete module graph wo
   w.setOffline(true);
   for (const path of paths) assert.equal(await (await w.request(path)).text(), "installed-asset", path);
 });
+
+test("an open older page can load its audio driver offline after an upgrade", async () => {
+  const w = worker();
+  await w.caches.open("precache-porphyrii-cache-9");
+  await w.lifecycle("install");
+  await w.lifecycle("activate");
+  assert.ok(!(await w.caches.keys()).includes("precache-porphyrii-cache-9"));
+  w.setOffline(true);
+  const response = await w.request("/core/espeak-wasm-driver.js?release=2026-09-19.2");
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), "installed-asset");
+});

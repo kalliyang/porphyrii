@@ -35,15 +35,24 @@ export function validateRestoration(data, input, hasMacron) {
     if (spec.enum && !spec.enum.includes(data[key])) errors.push(`${key} is unsupported`);
   }
   if (data.correction_reason !== null && typeof data.correction_reason !== "string") errors.push("correction_reason must be string or null");
-  if (data.spelling_corrected && !data.correction_reason?.trim()) errors.push("a spelling correction needs an explanation");
+  if (data.spelling_corrected && (typeof data.correction_reason !== "string" || !data.correction_reason.trim())) errors.push("a spelling correction needs an explanation");
   if (errors.length) return { ok: false, errors };
   for (const [field, limit] of [["scansion_text", 6000], ["original_text_cleaned", 6000], ["translation", 24000], ["grammar_notes", 16000]]) {
     if (data[field].length > limit) errors.push(`${field} exceeds its size limit`);
   }
+  if (data.correction_reason?.length > 2000) errors.push("correction_reason exceeds its size limit");
   const original = lines(input);
   const restored = lines(data.scansion_text);
   if (restored.length !== original.length) errors.push("preserve the input line count");
-  if (normalizeLatin(data.original_text_cleaned) !== normalizeLatin(input)) errors.push("original_text_cleaned changed the input letters");
+  const cleaned = lines(data.original_text_cleaned);
+  if (cleaned.length !== original.length) errors.push("preserve the original line count");
+  cleaned.forEach((line, i) => {
+    const letters = normalizeLatin(line);
+    if (letters !== normalizeLatin(original[i]) &&
+        !(data.spelling_corrected && letters === normalizeLatin(restored[i]))) {
+      errors.push(`line ${i + 1}: original_text_cleaned differs from both the input and the declared reading`);
+    }
+  });
   if (hasMacron && markedLetters(input) !== markedLetters(data.scansion_text)) errors.push("preserve the user's existing quantity marks exactly");
   if (!data.spelling_corrected) {
     original.forEach((line, i) => {

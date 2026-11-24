@@ -4,11 +4,13 @@
 
 **Latin poetry scansion, macron restoration, and recitation — a Progressive Web App.**
 
-Porphyrii restores vowel quantities (macrons) in Classical Latin verse and prose, scans the meter
-(dactylic hexameter and elegiac verse), translates and annotates, and reads the text aloud
-with rule-based classical pronunciation — entirely in the browser, offline-capable, no account required.
+New analyses require an internet connection. The server checks that a passage is Latin,
+restores vowel quantities in context, and returns an English translation and grammar notes.
+The browser checks the metrical reading, transcribes Latin to IPA, and reads it aloud
+with eSpeak NG WebAssembly. Once the app is cached, these tools and passages saved
+in IndexedDB are available offline. No account is required.
 
-**Status:** public beta (v0.9.0-beta) live at [porphyrii.org](https://porphyrii.org), August 2026.
+**Current version** v0.9.1, November 2026. [porphyrii.org](https://porphyrii.org)
 
 ## How it works
 

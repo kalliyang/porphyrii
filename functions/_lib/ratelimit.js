@@ -6,7 +6,7 @@
  *   global:  GLOBAL_DAILY_CAP requests per UTC day (default 500) — the
  *            cost circuit-breaker protecting the owner's LLM budget.
  *
- * Both endpoints (validate + analyze) count against both counters; only
+ * Each endpoint has independent hourly and daily counters; only
  * requests that PASSED Turnstile and the programmatic prechecks consume
  * quota, so junk traffic cannot burn the daily cap.
  *
@@ -26,15 +26,16 @@ const DAY_MS = 86_400_000;
  * @param {string} ip client IP (CF-Connecting-IP)
  * @returns {Promise<{ ok: boolean, status?: number, reason?: string, retryAfter?: number }>}
  */
-export async function checkRateLimit(env, ip) {
+export async function checkRateLimit(env, ip, scope = "analyze") {
+  if (!["validate", "analyze"].includes(scope)) throw new TypeError("Unknown rate limit scope");
   const perHour = Number.parseInt(env.RATE_LIMIT_PER_HOUR ?? "30", 10) || 30;
   const dailyCap = Number.parseInt(env.GLOBAL_DAILY_CAP ?? "500", 10) || 500;
 
   const now = Date.now();
   const hourBucket = Math.floor(now / HOUR_MS);
   const dayBucket = Math.floor(now / DAY_MS);
-  const ipKey = `ip:${ip}:${hourBucket}`;
-  const globalKey = `global:${dayBucket}`;
+  const ipKey = `ip:${scope}:${ip}:${hourBucket}`;
+  const globalKey = `global:${scope}:${dayBucket}`;
 
   let ipCount;
   let globalCount;

@@ -3,21 +3,22 @@ import { verifyTurnstile } from "../_lib/turnstile.js";
 import { precheck } from "../_lib/precheck.js";
 import { checkRateLimit } from "../_lib/ratelimit.js";
 import { runGuard } from "../_lib/llm.js";
-import { json } from "../_lib/http.js";
+import { json, readJsonBody } from "../_lib/http.js";
 
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return json({ ok: false, reject_reason: "Malformed request body." }, 400);
+  const parsed = await readJsonBody(request);
+  if (!parsed.ok) return json({ ok: false, reject_reason: parsed.reason }, parsed.status);
+  const { body } = parsed;
+  const pre = precheck(body.text);
+  if (!pre.ok) return json({ ok: false, reject_reason: pre.reason }, 400);
+  const token = body.turnstile_token;
+  if (typeof token !== "string" || !token.length || token.length > 4096) {
+    return json({ ok: false, reject_reason: "Please complete human verification and try again." }, 400);
   }
-
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-
-  const ts = await verifyTurnstile(env.TURNSTILE_SECRET, body?.turnstile_token, ip);
+  const ts = await verifyTurnstile(env.TURNSTILE_SECRET, token, ip);
   if (!ts.ok) {
     return json(
       { ok: false, reject_reason: ts.reason, verify_codes: ts.codes ?? null },
@@ -25,12 +26,7 @@ export async function onRequestPost(context) {
     );
   }
 
-  // 2. Programmatic prechecks: length, charset, has_macron — no LLM
-  const pre = precheck(body?.text);
-  if (!pre.ok) return json({ ok: false, reject_reason: pre.reason }, 400);
-
-  // 3. Rate limit (only requests that passed 1+2 consume quota)
-  const rl = await checkRateLimit(env, ip);
+  const rl = await checkRateLimit(env, ip, "validate");
   if (!rl.ok) {
     return json({ ok: false, reject_reason: rl.reason }, rl.status, {
       "Retry-After": String(rl.retryAfter),
@@ -38,7 +34,7 @@ export async function onRequestPost(context) {
   }
 
   // 4. Guard LLM: the only probabilistic judgment on this endpoint (is_latin)
-  const guard = await runGuard(env, body.text);
+  const guard = await runGuard(env, body.text, request.signal);
   if (!guard.ok) {
     return json(
       {

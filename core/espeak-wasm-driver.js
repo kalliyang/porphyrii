@@ -144,9 +144,10 @@ function playPcm(pcm, sampleRate) {
       new vendor.DriverStateError("playIPA: no AudioContext in this environment")
     );
   }
+  if (_audioCtx?.state === "closed") _audioCtx = null;
   _audioCtx ??= new Ctor();
   const resume =
-    _audioCtx.state === "suspended" ? _audioCtx.resume() : Promise.resolve();
+    _audioCtx.state !== "running" ? _audioCtx.resume() : Promise.resolve();
   return resume.then(
     () =>
       new Promise((resolve) => {

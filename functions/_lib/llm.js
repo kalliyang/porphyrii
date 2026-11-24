@@ -52,7 +52,7 @@ async function readEnvelope(response) {
 // Provider calls
 // ---------------------------------------------------------------------------
 
-export async function callGemini({ key, model, system, user, timeoutMs, maxTokens, schema, thinkingLevel = "low" }) {
+export async function callGemini({ key, model, system, user, timeoutMs, maxTokens, schema, thinkingLevel = "low", signal }) {
   const url = "https://generativelanguage.googleapis.com/v1beta/interactions";
   let resp;
   try {
@@ -75,7 +75,7 @@ export async function callGemini({ key, model, system, user, timeoutMs, maxToken
           thinking_summaries: "none",
         },
       }),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: signal ? AbortSignal.any([AbortSignal.timeout(timeoutMs), signal]) : AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
     throw new TransportError(`gemini fetch failed: ${e.message ?? e}`);
@@ -100,7 +100,7 @@ export async function callGemini({ key, model, system, user, timeoutMs, maxToken
   return text;
 }
 
-export async function callDeepSeek({ key, model, system, user, timeoutMs, maxTokens, temperature, thinkingLevel }) {
+export async function callDeepSeek({ key, model, system, user, timeoutMs, maxTokens, temperature, thinkingLevel, signal }) {
   let resp;
   try {
     resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -122,7 +122,7 @@ export async function callDeepSeek({ key, model, system, user, timeoutMs, maxTok
         thinking: { type: thinkingLevel ? "enabled" : "disabled" },
         ...(thinkingLevel ? { reasoning_effort: "low" } : {}),
       }),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: signal ? AbortSignal.any([AbortSignal.timeout(timeoutMs), signal]) : AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
     throw new TransportError(`deepseek fetch failed: ${e.message ?? e}`);
@@ -147,49 +147,13 @@ export async function callDeepSeek({ key, model, system, user, timeoutMs, maxTok
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Regroup sentence-level prose entries to match the original input lines.
- * The repaired object still passes through full response validation.
- */
-export function repairProseLineFragmentation(d) {
-  if (d?.meter !== "prose" || !Array.isArray(d?.scansion) || typeof d?.scansion_text !== "string") {
-    return d;
-  }
-  const textLines = d.scansion_text
-    .split(/\r\n|\r|\n/)
-    .filter((l) => normalizeLatin(l).length > 0);
-  if (textLines.length === d.scansion.length) return d; // already aligned
-
-  const merged = [];
-  let i = 0;
-  for (let lineIdx = 0; lineIdx < textLines.length; lineIdx++) {
-    const target = normalizeLatin(textLines[lineIdx]);
-    const texts = [];
-    const notes = [];
-    let acc = "";
-    while (i < d.scansion.length && acc !== target) {
-      const e = d.scansion[i++];
-      if (typeof e?.text !== "string") return d;
-      texts.push(e.text.trim());
-      if (typeof e.note === "string" && e.note.trim()) notes.push(e.note.trim());
-      acc = normalizeLatin(texts.join(" "));
-    }
-    if (acc !== target) return d; // overshoot or ran out — not a clean split
-    merged.push({
-      line: lineIdx + 1,
-      text: texts.join(" "),
-      feet: [],
-      foot_types: [],
-      note: notes.length ? notes.join(" ") : null,
-    });
-  }
-  if (i !== d.scansion.length) return d; // leftover entries — misaligned
-  return { ...d, scansion: merged };
-}
-
 /** Tolerate markdown fences / surrounding prose around the JSON object. */
 function extractJson(raw) {
   let s = raw.trim();
+  try {
+    const direct = JSON.parse(s);
+    if (direct && typeof direct === "object") return direct;
+  } catch { /* Some providers wrap JSON in Markdown. */ }
   const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fence) s = fence[1].trim();
   const start = s.indexOf("{");
@@ -220,12 +184,14 @@ export async function runChain(providers, job) {
     let nudge = "";
     let best = null;
     for (let attempt = 1; attempt <= 2; attempt++) {
+      job.signal?.throwIfAborted();
       const remaining = deadline - Date.now();
       if (remaining <= 0) return best
         ? { ok: true, data: best.data, provider: p.name, model: p.model, attempts }
         : { ok: false, reason: "timeout", attempts };
       try {
         const raw = await p.call({
+          signal: job.signal,
           key: p.key,
           model: p.model,
           system: job.system,
@@ -236,6 +202,7 @@ export async function runChain(providers, job) {
           schema: job.schema,
           thinkingLevel: p.thinkingLevel ?? job.thinkingLevel,
         });
+        job.signal?.throwIfAborted();
         let parsed;
         try {
           parsed = extractJson(raw);
@@ -245,16 +212,12 @@ export async function runChain(providers, job) {
           if (attempt === 2) break;
           continue;
         }
-        // Optional deterministic pre-validation repair (e.g. prose line
-        // defragmentation); the candidate — not the raw parse — is what gets
-        // validated AND returned, so repaired output never bypasses the
-        // validator.
-        let candidate = job.transform ? job.transform(parsed) : parsed;
+        let candidate = parsed;
         const v = job.validate(candidate);
         if (v.ok) {
           if (best && job.reconcile) candidate = job.reconcile(best.data, candidate);
           const review = job.review?.(candidate) ?? { score: 0, errors: [] };
-          if (!best || review.score > best.score) best = { data: candidate, score: review.score };
+          if (!best || review.score >= best.score) best = { data: candidate, score: review.score };
           if (attempt === 1 && review.errors.length) {
             nudge = retryNudge(review.errors);
             attempts.push({ provider: p.name, attempt, error: "quantity-review" });
@@ -266,6 +229,7 @@ export async function runChain(providers, job) {
         nudge = retryNudge(v.errors);
         if (attempt === 2) break;
       } catch (e) {
+        job.signal?.throwIfAborted();
         if (e instanceof TransportError) {
           attempts.push({ provider: p.name, attempt, error: "transport", detail: e.message });
           break; // -> next provider
@@ -290,6 +254,7 @@ function guardValidator(d) {
   if (d.reject_reason !== null && d.reject_reason !== undefined && typeof d.reject_reason !== "string") {
     errors.push("reject_reason must be string|null");
   }
+  if (d.reject_reason?.length > 500) errors.push("reject_reason exceeds its size limit");
   if (d.is_latin === false && typeof d.reject_reason !== "string") {
     errors.push("reject_reason required when is_latin is false");
   }
@@ -300,7 +265,7 @@ function guardValidator(d) {
  * @returns {Promise<{ ok: boolean, isLatin?: boolean, rejectReason?: string,
  *   provider?: string, model?: string }>} ok=false means total failure (502).
  */
-export async function runGuard(env, text) {
+export async function runGuard(env, text, signal) {
   const r = await runChain(
     [
       {
@@ -312,6 +277,7 @@ export async function runGuard(env, text) {
       { name: "deepseek", key: env.DEEPSEEK_API_KEY, model: env.FALLBACK_GUARD_MODEL ?? MODEL_DEFAULTS.FALLBACK_GUARD_MODEL, call: callDeepSeek },
     ],
     {
+      signal,
       system: GUARD_SYSTEM_PROMPT,
       user: wrapUserText(text),
       timeoutMs: GUARD_TIMEOUT_MS,
@@ -337,7 +303,17 @@ export async function runGuard(env, text) {
 }
 
 
-export async function runSolver(env, text, hasMacron) {
+export async function runSolver(env, text, hasMacron, signal) {
+  const cache = new Map();
+  function scan(data, allowVariants) {
+    const key = `${Boolean(allowVariants)}\0${data.meter}\0${data.meter_confidence}\0${data.scansion_text}`;
+    if (!cache.has(key)) {
+      const { scansion_version, scansion, meter_confidence } =
+        resolveScansion({ ...data, allow_quantity_variants: allowVariants });
+      cache.set(key, { scansion_version, scansion, meter_confidence });
+    }
+    return { ...data, allow_quantity_variants: allowVariants, ...cache.get(key) };
+  }
   const r = await runChain(
     [
       {
@@ -349,6 +325,7 @@ export async function runSolver(env, text, hasMacron) {
       { name: "deepseek", key: env.DEEPSEEK_API_KEY, model: env.FALLBACK_SOLVER_MODEL ?? MODEL_DEFAULTS.FALLBACK_SOLVER_MODEL, call: callDeepSeek },
     ],
     {
+      signal,
       system: hasMacron ? SOLVER_SYSTEM_PROMPT_SCAN_ONLY : SOLVER_SYSTEM_PROMPT_RESTORE,
       user: wrapUserText(text),
       timeoutMs: SOLVER_TIMEOUT_MS,
@@ -358,19 +335,19 @@ export async function runSolver(env, text, hasMacron) {
       totalTimeoutMs: 100_000,
       validate: (data) => validateRestoration(data, text, hasMacron),
       reconcile: (first, reviewed) => {
-        const checked = resolveScansion({ ...first, allow_quantity_variants: true });
+        const checked = scan(first, true);
         const oldLines = first.scansion_text.split(/\r\n|\r|\n/);
         const newLines = reviewed.scansion_text.split(/\r\n|\r|\n/).filter((line) => normalizeLatin(line));
         let index = 0;
         const merged = oldLines.map((line) => {
           if (!normalizeLatin(line)) return line;
           const i = index++;
-          return checked.scansion[i].status === "unresolved" && normalizeLatin(line) === normalizeLatin(newLines[i] ?? "") ? newLines[i] : line;
+          return checked.scansion[i]?.status === "unresolved" && normalizeLatin(line) === normalizeLatin(newLines[i] ?? "") ? newLines[i] : line;
         });
-        return { ...first, scansion_text: merged.join("\n") };
+        return { ...first, translation: reviewed.translation, grammar_notes: reviewed.grammar_notes, scansion_text: merged.join("\n") };
       },
       review: hasMacron ? undefined : (data) => {
-        const result = resolveScansion({ ...data, allow_quantity_variants: true });
+        const result = scan(data, true);
         const unresolved = result.scansion.filter((line) => line.status === "unresolved");
         return {
           score: result.scansion.filter((line) => line.status === "resolved").length,
@@ -384,5 +361,5 @@ export async function runSolver(env, text, hasMacron) {
     return { ok: false };
   }
   console.log(`[porphyrii] solver ok via ${r.provider} (${r.model})`);
-  return { ok: true, data: resolveScansion({ ...r.data, allow_quantity_variants: !hasMacron }), provider: r.provider, model: r.model };
+  return { ok: true, data: scan(r.data, !hasMacron), provider: r.provider, model: r.model };
 }

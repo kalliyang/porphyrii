@@ -83,3 +83,83 @@ test("unqualified Greek eu must not yield a confidently wrong foot division", ()
   assert.equal(result.status, "unsupported");
   assert.deepEqual(result.feet, []);
 });
+
+function checkedReading(text, meter = "dactylic_hexameter") {
+  const result = resolveScansion({ scansion_text: text, meter, meter_confidence: "high" });
+  const line = result.scansion[0];
+  assert.equal(line.status, "resolved", text);
+  const validation = validateScansion(result);
+  assert.ok(validation.ok);
+  const display = buildScansionView(result, validation).lines[0].feet.flatMap((foot) => foot.syllables);
+  assert.equal(display.map((s) => s.text).join("").replace(/[()]/g, ""),
+    text.normalize("NFC").replace(/[^\p{L}]/gu, ""));
+  const ipa = deriveIpa(result);
+  assert.ok(ipa.ok);
+  return { ...line.pronunciation, ipa: ipa.lines[0].ipa };
+}
+
+for (const [reference, text, liaison, meter] of [
+  ["Aeneid 4.540", "quis mē autem, fac velle, sinet ratibusve superbīs", "m(ē)autem"],
+  ["Aeneid 2.142", "per sī qua est quae restet adhūc mortālibus usquam", "qu(a)est"],
+  ["Eclogues 3.48", "sī ad vitulam spectās, nihil est quod pōcula laudēs", "s(ī)ad"],
+  ["Catullus 73.6", "quam modo quī mē ūnum atque ūnicum amīcum habuit", "m(ē)ūn", "elegiac_pentameter"],
+]) {
+  test(reference + " preserves an elided monosyllable across display and recitation", () => {
+    assert.ok(checkedReading(text, meter).text.includes(liaison));
+  });
+}
+
+const heavyTail = (count) => "nōn ".repeat(count) + "est";
+test("elision preserves written h without a cross-word aspirated stop", () => {
+  for (const prefix of ["cum", "tē"]) {
+    const reading = checkedReading(`nunc ${prefix} habet est ${heavyTail(8)}`);
+    assert.doesNotMatch(reading.ipa, /[kpt]ʰ/);
+    assert.match(reading.ipa, /[kt]a/);
+  }
+});
+
+test("elided i stays consonantal before short and long i, with later selectors remapped", () => {
+  for (const [text, onset] of [
+    ["iam ille est " + heavyTail(9), /jɪ/],
+    ["iam īvit " + heavyTail(9), /jiː/],
+    ["i(am) ille relīquiās " + heavyTail(7), /jɪ/],
+  ]) assert.match(checkedReading(text).ipa, onset);
+});
+
+test("unmarked qui retains its labialized onset and long initial I permits elision", () => {
+  const qui = checkedReading("nunc qui habet est " + heavyTail(8));
+  assert.match(qui.text, /qu\(i\)habet/);
+  assert.match(qui.ipa, /kʷ/);
+  for (const word of ["Īoniō", "Īoniō".normalize("NFD")]) {
+    assert.match(checkedReading("mē " + word + " " + heavyTail(8)).text, /m\(ē\)Īoniō/);
+  }
+});
+
+test("glide contraction removes a vocalic syllable and can coexist with final elision", () => {
+  for (const text of [
+    "aqua virumque canō, Troiae quī prīmus ab ōrīs",
+    "Arma virumque canō, Troia quī prīmus ab ōrīs",
+  ]) assert.equal(scanVerseLine(text, "dactylic_hexameter").status, "unresolved");
+  assert.match(checkedReading("omni(a) et " + heavyTail(9)).overrides[0].split, /nj/);
+});
+
+test("licensed vowel alternatives preserve case in both directions", () => {
+  for (const [text, change] of [
+    ["GĒNS INIMĪCA MIHI TYRRHĒNUM NĀVIGAT AEQUOR", "MIHI → MIHĪ"],
+    ["nunc MIHĪ " + heavyTail(9), "MIHĪ → MIHI"],
+    ["VENIT " + heavyTail(9), "VENIT → VĒNIT"],
+    ["nunc VĒNIT est " + heavyTail(8), "VĒNIT → VENIT"],
+    ["ŪNĪUS " + heavyTail(9), "ŪNĪUS → ŪNIUS"],
+    ["ŪNIUS " + heavyTail(8), "ŪNIUS → ŪNĪUS"],
+  ]) {
+    const line = scanVerseLine(text, "dactylic_hexameter", { allowQuantityVariants: true });
+    assert.equal(line.status, "resolved");
+    assert.deepEqual(line.quantityChanges, [change]);
+  }
+});
+
+test("unpronounceable abbreviations do not enable recitation", () => {
+  const result = resolveScansion({ scansion_text: "S. P. Q. R.", meter: "prose" });
+  assert.deepEqual(deriveIpa(result), { ok: false, lines: [], problems: [],
+    error: "Pronunciation is unavailable for this result." });
+});

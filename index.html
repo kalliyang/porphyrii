@@ -23,23 +23,23 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preload" href="fonts/Cardo-Regular.woff2" type="font/woff2" as="font" crossorigin>
   <link rel="preload" href="fonts/Inter-Variable.woff2" type="font/woff2" as="font" crossorigin>
-  <link rel="stylesheet" href="tokens.css?release=2026-09-19.2">
-  <link rel="stylesheet" href="style.css?release=2026-09-19.2">
+  <link rel="stylesheet" href="tokens.css?release=2026-11-24.1">
+  <link rel="stylesheet" href="style.css?release=2026-11-24.1">
   <script type="importmap">
   {"imports": {
-    "/app/audio.js": "/app/audio.js?release=2026-09-19.2",
-    "/app/db.js": "/app/db.js?release=2026-09-19.2",
-    "/app/ipa.js": "/app/ipa.js?release=2026-09-19.2",
-    "/app/scansion-view.js": "/app/scansion-view.js?release=2026-09-19.2",
-    "/app/turnstile.js": "/app/turnstile.js?release=2026-09-19.2",
-    "/services/text-integrity.js": "/services/text-integrity.js?release=2026-09-19.2",
-    "/core/latin-g2p.js": "/core/latin-g2p.js?release=2026-09-19.2",
-    "/core/latin-quantity.js": "/core/latin-quantity.js?release=2026-09-19.2",
-    "/core/latin-scansion.js": "/core/latin-scansion.js?release=2026-09-19.2",
-    "/core/syllable-overrides.js": "/core/syllable-overrides.js?release=2026-09-19.2",
-    "/core/espeak-wasm-driver.js": "/core/espeak-wasm-driver.js?release=2026-09-19.2",
-    "/vendor/espeak-ng/espeak-wasm-driver.js": "/vendor/espeak-ng/espeak-wasm-driver.js?release=2026-09-19.2",
-    "/vendor/espeak-ng/espeak-ng.js": "/vendor/espeak-ng/espeak-ng.js?release=2026-09-19.2"
+    "/app/audio.js": "/app/audio.js?release=2026-11-24.1",
+    "/app/db.js": "/app/db.js?release=2026-11-24.1",
+    "/app/ipa.js": "/app/ipa.js?release=2026-11-24.1",
+    "/app/scansion-view.js": "/app/scansion-view.js?release=2026-11-24.1",
+    "/app/turnstile.js": "/app/turnstile.js?release=2026-11-24.1",
+    "/services/text-integrity.js": "/services/text-integrity.js?release=2026-11-24.1",
+    "/core/latin-g2p.js": "/core/latin-g2p.js?release=2026-11-24.1",
+    "/core/latin-quantity.js": "/core/latin-quantity.js?release=2026-11-24.1",
+    "/core/latin-scansion.js": "/core/latin-scansion.js?release=2026-11-24.1",
+    "/core/syllable-overrides.js": "/core/syllable-overrides.js?release=2026-11-24.1",
+    "/core/espeak-wasm-driver.js": "/core/espeak-wasm-driver.js?release=2026-11-24.1",
+    "/vendor/espeak-ng/espeak-wasm-driver.js": "/vendor/espeak-ng/espeak-wasm-driver.js?release=2026-11-24.1",
+    "/vendor/espeak-ng/espeak-ng.js": "/vendor/espeak-ng/espeak-ng.js?release=2026-11-24.1"
   }}
   </script>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&amp;onload=__porTurnstileReady" async defer></script>
@@ -236,16 +236,16 @@
 
         <h3>AI-assisted results</h3>
         <p>
-          Macron restoration, scansion, translation, and grammar notes are produced with
-          AI assistance and <strong>can be wrong</strong>. Always verify against your
-          textbook before relying on them in class or in coursework.
+          Macron restoration, translation, and grammar notes use AI assistance and
+          can contain errors. A deterministic solver uses the restored quantities to
+          calculate metrical feet. It displays confirmed feet and identifies lines
+          whose readings are ambiguous, unresolved, or outside the supported metres.
         </p>
         <p>
-          Two deterministic checks help you judge each result. The text-integrity check
-          proves the model did not alter your letters (and shows a diff when it did); it
-          says nothing about whether the scansion is <i>correct</i>. The quantity validator
-          checks that the scansion is self-consistent with the restored macrons; a macron
-          that is itself wrong (a lexical quantity error) is beyond its reach.
+          The text-integrity check compares the letters with your input and shows
+          changes. A separate check verifies that the feet fit the restored quantities.
+          A mistaken lexical vowel length can still affect the reading. Check the
+          quantities and interpretation against your textbook.
         </p>
 
         <h3>Licenses</h3>
@@ -266,6 +266,6 @@
     <p class="noscript-note">Porphyrii needs JavaScript to analyze Latin text. Please enable JavaScript and reload.</p>
   </noscript>
 
-  <script type="module" src="main.js?release=2026-09-19.2"></script>
+  <script type="module" src="main.js?release=2026-11-24.1"></script>
 </body>
 </html>

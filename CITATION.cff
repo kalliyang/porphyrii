@@ -6,13 +6,13 @@ authors:
   - given-names: "Zhiping"
     family-names: "Yang"
 abstract: >-
-  A Progressive Web Application for Classical Latin poetry macron
-  restoration, metrical scansion, and precise recitation. Uses
-  a two-tier LLM pipeline (guard model + reasoning model) for
-  scansion analysis, deterministic text-integrity validation for
-  anti-hallucination, a rule-based Latin G2P engine, and eSpeak NG
-  WebAssembly formant synthesis for classical pronunciation
-  without neural TTS.
+  Porphyrii uses a two-stage online language model pipeline to identify Latin,
+  restore lexical vowel quantities in context, translate the passage, and explain
+  its grammar. A bounded deterministic solver scans dactylic hexameter, elegiac
+  couplets, and isolated pentameters. Text-integrity checks compare the source
+  letters with the restored text. A rule-based pronunciation engine follows
+  W. S. Allen's Vox Latina and drives eSpeak NG WebAssembly formant synthesis
+  in the browser. Saved passages support local history and offline recitation.
 keywords:
   - "Latin poetry"
   - "scansion"
@@ -22,7 +22,7 @@ keywords:
   - "classical studies"
   - "Latin pedagogy"
 license: AGPL-3.0
-version: 0.9.0
-date-released: 2026-08-18
+version: 0.9.1
+date-released: 2026-11-24
 repository-code: "https://github.com/kalliyang/porphyrii"
 url: "https://porphyrii.org"

@@ -18,7 +18,12 @@ function openDb() {
         store.createIndex("createdAt", "createdAt");
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    let blocked = false;
+    req.onblocked = () => {
+      blocked = true;
+      reject(new Error("Database upgrade blocked"));
+    };
+    req.onsuccess = () => blocked ? req.result.close() : resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
@@ -62,7 +67,7 @@ export async function getHistory(limit = DEFAULT_LIMIT) {
       req.onerror = () => reject(req.error);
     });
     return records
-      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : (b.id ?? 0) - (a.id ?? 0)))
       .slice(0, limit);
   } finally {
     db.close();

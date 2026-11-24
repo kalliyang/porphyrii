@@ -60,35 +60,46 @@ export class TurnstileManager {
    * `error` state (the challenge behavior: challenge failure is never silent).
    * @returns {Promise<string>}
    */
-  getToken() {
-    return new Promise((resolve, reject) => {
-      if (!this.ready || this.widgetId === null) {
-        reject(new Error("Human verification is not ready yet — please wait a moment and try again."));
-        return;
-      }
-      try {
-        // Force a fresh single-use token: without a reset, execute() can
-        // resolve with the cached (already server-consumed) token — see the
-        // header note on widget caching.
-        this._reset();
-        window.turnstile.execute(this.container, {
-          callback: (token) => resolve(token),
-          "error-callback": (code) => {
-            this._recordError(code);
-            reject(
-              new Error(
-                `Human verification failed (code ${code ?? "unknown"}). Please try again — if this keeps happening, please report the code.`
-              )
-            );
-          },
-          "expired-callback": () =>
-            reject(new Error("Human verification expired. Please try again.")),
-          "timeout-callback": () =>
-            reject(new Error("Human verification timed out. Please try again.")),
-        });
-      } catch (err) {
-        reject(err instanceof Error ? err : new Error(String(err)));
-      }
-    });
+  async getToken({ signal, timeoutMs = 15_000 } = {}) {
+    const aborted = () => new DOMException("Aborted", "AbortError");
+    if (signal?.aborted) throw aborted();
+    let timer, onAbort;
+    try {
+      return await new Promise((resolve, reject) => {
+        onAbort = () => reject(aborted());
+        signal?.addEventListener("abort", onAbort, { once: true });
+        timer = setTimeout(() => reject(new Error("Human verification timed out. Please try again.")), timeoutMs);
+        if (!this.ready || this.widgetId === null) {
+          reject(new Error("Human verification is not ready yet — please wait a moment and try again."));
+          return;
+        }
+        try {
+          // Force a fresh single-use token: without a reset, execute() can
+          // resolve with the cached (already server-consumed) token — see the
+          // header note on widget caching.
+          this._reset();
+          window.turnstile.execute(this.container, {
+            callback: (token) => resolve(token),
+            "error-callback": (code) => {
+              this._recordError(code);
+              reject(
+                new Error(
+                  `Human verification failed (code ${code ?? "unknown"}). Please try again — if this keeps happening, please report the code.`
+                )
+              );
+            },
+            "expired-callback": () =>
+              reject(new Error("Human verification expired. Please try again.")),
+            "timeout-callback": () =>
+              reject(new Error("Human verification timed out. Please try again.")),
+          });
+        } catch (err) {
+          reject(err instanceof Error ? err : new Error(String(err)));
+        }
+      });
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    }
   }
 }

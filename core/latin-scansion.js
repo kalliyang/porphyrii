@@ -44,9 +44,11 @@ function fits(syllable, weight) {
 }
 
 function canElideInto(word) {
-  const key = bare(pronounced(word));
+  const onset = pronounced(word).normalize("NFC").replace(/^h/i, "");
+  if (/^ī/i.test(onset)) return true;
+  const key = bare(onset);
   if (/^i[aeiouy]/.test(key)) return false; // consonantal initial i
-  return /^h?[aeiouy]/.test(key);
+  return /^[aeiouy]/.test(key);
 }
 
 function elisionForms(words) {
@@ -54,7 +56,8 @@ function elisionForms(words) {
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
     const lastSyllable = analyzeLatin(pronounced(word)).lines[0]?.syllables.at(-1)?.ortho ?? "";
-    const tail = lastSyllable.match(new RegExp(`(ae|au|oe|ei|eu|ui|[${VOWEL}])m?$`, "iu"));
+    const nucleus = lastSyllable.replace(/^.*[qg]u(?=[aeiouyāēīōūȳăĕĭŏŭ])/iu, "");
+    const tail = nucleus.match(new RegExp(`(ae|au|oe|ei|eu|ui|[${VOWEL}])m?$`, "iu"));
     const canElide = !word.includes("(") && tail && i + 1 < words.length && canElideInto(words[i + 1]);
     const choices = canElide
       ? [{ text: word.slice(0, -tail[0].length) + `(${word.slice(-tail[0].length)})`, cost: 0 }, { text: word, cost: 1 }]
@@ -73,14 +76,18 @@ function elisionForms(words) {
 }
 
 /** Source letters stay in order, including elisions inside a liaison syllable. */
-function displaySyllables(words, syllables, weights) {
+function displaySyllables(words, syllables, weights, silentH) {
   const units = [];
-  for (const word of words) {
+  for (const [index, word] of words.entries()) {
+    let initial = true;
     let elided = false;
     for (const letter of word) {
       if (letter === "(") elided = true;
       else if (letter === ")") elided = false;
-      else units.push({ letter, elided });
+      else {
+        units.push({ letter, elided, silent: initial && silentH.has(index) });
+        initial = false;
+      }
     }
   }
   let cursor = 0;
@@ -95,6 +102,8 @@ function displaySyllables(words, syllables, weights) {
         let omitted = "";
         while (units[cursor]?.elided) omitted += units[cursor++].letter;
         text += `(${omitted})`;
+      } else if (units[cursor].silent) {
+        text += units[cursor++].letter;
       } else {
         const letter = units[cursor++].letter;
         text += letter;
@@ -113,10 +122,47 @@ function displaySyllables(words, syllables, weights) {
   return cursor === units.length ? output : null;
 }
 
+// Join a vowel-less elided onset to its host. Keep source words separate for
+// display and translate word selectors into the joined pronunciation stream.
+function pronunciationRecipe(candidate) {
+  const groups = [];
+  const overrides = [];
+  const silentH = new Set();
+  let prefix = "";
+  let splitPrefix = "";
+  for (const [i, source] of candidate.words.entries()) {
+    let word = source;
+    const override = candidate.overrides?.find((o) => o.word === i);
+    let split = override?.split ?? pronounced(word);
+    if (/[cpt]$/i.test(pronounced(prefix)) && /^h/iu.test(word)) {
+      silentH.add(i);
+      word = word.slice(1);
+      split = split.slice(1);
+    }
+    const stem = pronounced(word);
+    const joins = word.includes("(") && i + 1 < candidate.words.length &&
+      (override?.joinNext || /^(?:[^aeiouyāēīōūȳăĕĭŏŭ]+|qu|i)$/iu.test(stem));
+    if (joins) {
+      prefix += word;
+      splitPrefix += /^i$/i.test(stem) ? "j" : split;
+      continue;
+    }
+    const joined = prefix + word;
+    const joinedSplit = splitPrefix + split;
+    if (joinedSplit !== pronounced(joined)) {
+      overrides.push({ line: 0, word: groups.length, split: joinedSplit });
+    }
+    groups.push(joined);
+    prefix = "";
+    splitPrefix = "";
+  }
+  return { text: groups.join(" "), overrides, silentH };
+}
+
 function candidateScan(candidate, meter) {
-  const text = candidate.words.join(" ");
+  const { text, overrides, silentH } = pronunciationRecipe(candidate);
   let line;
-  try { line = analyzeLatin(text, { overrides: candidate.overrides ?? [] }).lines[0]; }
+  try { line = analyzeLatin(text, { overrides }).lines[0]; }
   catch { return []; }
   const syllables = line.syllables.filter((s) => !s.elided);
   const matches = [];
@@ -127,7 +173,7 @@ function candidateScan(candidate, meter) {
       const middle = template[0].length + template[1].length + 1;
       if (syllables[middle - 1].word === syllables[middle].word) continue;
     }
-    const display = displaySyllables(candidate.words, syllables, weights);
+    const display = displaySyllables(candidate.words, syllables, weights, silentH);
     if (!display) continue;
     const feet = template.map(() => []);
     let foot = 0;
@@ -141,7 +187,7 @@ function candidateScan(candidate, meter) {
       feet,
       foot_types: template.map((f, i) => i === template.length - 1 ? "final" : f === "HLL" ? "dactyl" : f === "HH" ? "spondee" : "longum"),
       pattern: template.join("|"),
-      pronunciation: { text, overrides: candidate.overrides ?? [] },
+      pronunciation: { text, overrides },
       spondaic: meter === "dactylic_hexameter" && template[4] === "HH",
       cost: candidate.cost,
       quantityChanges: candidate.quantityChanges ?? [],
@@ -153,16 +199,33 @@ function candidateScan(candidate, meter) {
 function glideCandidates(candidate) {
   const results = [];
   candidate.words.forEach((word, wordIndex) => {
-    if (word.includes("(")) return;
-    // Only a single unmarked i/u before a vowel; lexical long vowels stay fixed.
-    for (let i = 1; i < word.length - 1; i++) {
-      if (!/[iu]/i.test(word[i]) || !new RegExp(`[${VOWEL}]`, "iu").test(word[i + 1])) continue;
-      const replacement = word[i].toLowerCase() === "i" ? "j" : "w";
-      const split = word.slice(0, i) + replacement + word.slice(i + 1);
-      results.push({ ...candidate, cost: candidate.cost + 2, overrides: [{ line: 0, word: wordIndex, split }] });
+    const stem = pronounced(word);
+    const next = candidate.words[wordIndex + 1];
+    const joinsVowel = word.endsWith(")") && next && canElideInto(next);
+    const vowel = new RegExp(`^[${VOWEL}]$`, "iu");
+    for (let i = 1; i < stem.length; i++) {
+      const letter = stem[i].toLowerCase();
+      if (letter !== "i" && letter !== "u") continue;
+      const joinNext = i === stem.length - 1 && joinsVowel;
+      if (!joinNext && !vowel.test(stem[i + 1] ?? "")) continue;
+      const before = stem.slice(0, i);
+      if (letter === "u" && /(?:q|ng)$/i.test(before)) continue;
+      if (letter === "i" && vowel.test(stem[i - 1]) && !/(?:qu|ngu)$/i.test(before)) continue;
+      const glide = letter === "i" ? "j" : "w";
+      const split = before + (stem[i] === letter ? glide : glide.toUpperCase()) + stem.slice(i + 1);
+      const local = [{ line: 0, word: 0, split }];
+      const syllables = (options) => analyzeLatin(word, options).lines[0].words[0].syllableCount;
+      if (syllables({ overrides: local }) !== syllables() - 1) continue;
+      results.push({ ...candidate, cost: candidate.cost + 2,
+        overrides: [{ line: 0, word: wordIndex, split, joinNext }] });
     }
   });
   return results;
+}
+
+function toggleQuantity(vowel) {
+  const decomposed = vowel.normalize("NFD");
+  return decomposed.length > 1 ? decomposed[0] : (vowel + "\u0304").normalize("NFC");
 }
 
 /** A deliberately small set of attested alternatives, never arbitrary vowel flips.
@@ -172,18 +235,18 @@ function glideCandidates(candidate) {
  */
 function quantityCandidates(words) {
   let states = [{ words: [], cost: 0, quantityChanges: [] }];
-  for (const word of words) {
+  for (const source of words) {
+    const word = source.normalize("NFC");
     const key = bare(word);
     const forms = [word];
     if (/^(mihi|tibi|sibi|ibi|ubi)$/.test(key)) {
-      forms.push(word.slice(0, -1) + (word.endsWith("ī") ? "i" : "ī"));
+      forms.push(word.replace(/[iī]$/i, toggleQuantity));
     } else if (key === "venit") {
-      forms.push(word.replace(/[eē]/, word.includes("ē") ? "e" : "ē"));
+      forms.push(word.replace(/[eē]/i, toggleQuantity));
     } else if (/^(unius|nullius|ullius|totius|solius|utrius|neutrius)$/.test(key)) {
-      forms.push(word.replace(/[iī]us$/i, word.toLowerCase().endsWith("īus") ? "ius" : "īus"));
+      forms.push(word.replace(/[iī](?=us$)/i, toggleQuantity));
     } else if (/^ital(?:ia|iam|iae|ias|iis|iarum|us|i|o|os|orum)$/.test(key)) {
-      const initial = word[0];
-      forms.push((initial === "Ī" ? "I" : initial === "ī" ? "i" : initial === "I" ? "Ī" : "ī") + word.slice(1));
+      forms.push(word.replace(/^[iī]/i, toggleQuantity));
     }
     states = states.flatMap((state) => [...new Set(forms)].map((form) => ({
       words: [...state.words, form], cost: state.cost + (form === word ? 0 : 4),
