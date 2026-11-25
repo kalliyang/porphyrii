@@ -2,7 +2,7 @@
 
 import { analyzeLatin } from "./latin-g2p.js";
 import { contractSyllableOverrides } from "./syllable-overrides.js";
-import { SCANSION_VERSION, resolveScansion, validFootStructure, expectedLineMeter } from "./latin-scansion.js";
+import { SCANSION_VERSION, resolveScansion, validFootStructure, metreTemplates, expectedLineMeter } from "./latin-scansion.js";
 
 // ============================================================================
 //  Weight-sequence derivation (shared syllabification, second exit)
@@ -213,11 +213,13 @@ export function validateScansion(contract, options = {}) {
     return { ok: true, meter, prose: true, lines: [], mismatchCount: 0 };
   }
   if (contract.scansion_version === SCANSION_VERSION) {
-    const checked = resolveScansion(contract);
+    const checked = resolveScansion(contract, options.preservedInput);
     const lines = checked.scansion.map((line, i) => {
       const stored = contract.scansion?.[i];
       const same = stored?.line === line.line && stored?.status === line.status && JSON.stringify(stored?.feet) === JSON.stringify(line.feet);
-      return { line: line.line, ok: same && line.status === "resolved", mismatches: [], note: !same ? "This saved analysis needs to be run again." : line.status !== "resolved" ? line.note : null };
+      const outside = line.status === "unsupported" && !metreTemplates(expectedLineMeter(meter, i)).length;
+      const ok = same && (line.status === "resolved" || outside);
+      return { line: line.line, ok, outside: same && outside, mismatches: [], note: !same ? "This saved analysis needs to be run again." : ok ? null : line.note };
     });
     return { ok: lines.every((line) => line.ok), meter, prose: false, lines, mismatchCount: 0, checked };
   }

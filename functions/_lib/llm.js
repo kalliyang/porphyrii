@@ -91,9 +91,11 @@ export async function callGemini({ key, model, system, user, timeoutMs, maxToken
     const aborted = e && (e.name === "TimeoutError" || e.name === "AbortError");
     throw new TransportError(aborted ? "gemini response body timed out" : "gemini returned non-JSON envelope");
   }
+  if (!data || typeof data !== "object" || Array.isArray(data) || !Array.isArray(data.steps)) throw new TransportError("gemini returned an invalid envelope");
   if (data.status !== "completed") throw new TransportError(`gemini response status=${data.status ?? "missing"}`);
-  const outputs = (data.steps ?? []).filter((step) => step.type === "model_output");
-  const text = (outputs.at(-1)?.content ?? []).filter((part) => part.type === "text").map((part) => part.text ?? "").join("");
+  const content = data.steps.findLast((step) => step?.type === "model_output")?.content;
+  if (!Array.isArray(content)) throw new TransportError("gemini returned an invalid output");
+  const text = content.filter((part) => part?.type === "text" && typeof part.text === "string").map((part) => part.text).join("");
   if (!text.trim()) {
     throw new TransportError("gemini returned no final text");
   }
@@ -137,7 +139,8 @@ export async function callDeepSeek({ key, model, system, user, timeoutMs, maxTok
     const aborted = e && (e.name === "TimeoutError" || e.name === "AbortError");
     throw new TransportError(aborted ? "deepseek response body timed out" : "deepseek returned non-JSON envelope");
   }
-  const text = data?.choices?.[0]?.message?.content ?? "";
+  const text = data?.choices?.[0]?.message?.content;
+  if (!data || typeof data !== "object" || Array.isArray(data) || typeof text !== "string") throw new TransportError("deepseek returned an invalid envelope");
   if (data?.choices?.[0]?.finish_reason !== "stop") throw new TransportError("deepseek returned an incomplete response");
   if (!text.trim()) throw new TransportError("deepseek empty content");
   return text;
@@ -255,7 +258,7 @@ function guardValidator(d) {
     errors.push("reject_reason must be string|null");
   }
   if (d.reject_reason?.length > 500) errors.push("reject_reason exceeds its size limit");
-  if (d.is_latin === false && typeof d.reject_reason !== "string") {
+  if (d.is_latin === false && (typeof d.reject_reason !== "string" || !d.reject_reason.trim())) {
     errors.push("reject_reason required when is_latin is false");
   }
   return { ok: errors.length === 0, errors };
@@ -305,14 +308,14 @@ export async function runGuard(env, text, signal) {
 
 export async function runSolver(env, text, hasMacron, signal) {
   const cache = new Map();
-  function scan(data, allowVariants) {
-    const key = `${Boolean(allowVariants)}\0${data.meter}\0${data.meter_confidence}\0${data.scansion_text}`;
+  function scan(data) {
+    const key = `${data.meter}\0${data.meter_confidence}\0${data.scansion_text}`;
     if (!cache.has(key)) {
       const { scansion_version, scansion, meter_confidence } =
-        resolveScansion({ ...data, allow_quantity_variants: allowVariants });
+        resolveScansion({ ...data, allow_quantity_variants: true }, text);
       cache.set(key, { scansion_version, scansion, meter_confidence });
     }
-    return { ...data, allow_quantity_variants: allowVariants, ...cache.get(key) };
+    return cache.get(key);
   }
   const r = await runChain(
     [
@@ -335,7 +338,11 @@ export async function runSolver(env, text, hasMacron, signal) {
       totalTimeoutMs: 100_000,
       validate: (data) => validateRestoration(data, text, hasMacron),
       reconcile: (first, reviewed) => {
-        const checked = scan(first, true);
+        const checked = scan(first);
+        if (reviewed.meter !== first.meter || reviewed.spelling_corrected !== first.spelling_corrected) {
+          const score = (reading) => reading.scansion.filter((line) => line.status === "resolved").length;
+          return score(scan(reviewed)) > score(checked) ? reviewed : first;
+        }
         const oldLines = first.scansion_text.split(/\r\n|\r|\n/);
         const newLines = reviewed.scansion_text.split(/\r\n|\r|\n/).filter((line) => normalizeLatin(line));
         let index = 0;
@@ -346,8 +353,8 @@ export async function runSolver(env, text, hasMacron, signal) {
         });
         return { ...first, translation: reviewed.translation, grammar_notes: reviewed.grammar_notes, scansion_text: merged.join("\n") };
       },
-      review: hasMacron ? undefined : (data) => {
-        const result = scan(data, true);
+      review: (data) => {
+        const result = scan(data);
         const unresolved = result.scansion.filter((line) => line.status === "unresolved");
         return {
           score: result.scansion.filter((line) => line.status === "resolved").length,
@@ -361,5 +368,6 @@ export async function runSolver(env, text, hasMacron, signal) {
     return { ok: false };
   }
   console.log(`[porphyrii] solver ok via ${r.provider} (${r.model})`);
-  return { ok: true, data: scan(r.data, !hasMacron), provider: r.provider, model: r.model };
+  const fields = Object.fromEntries(RESTORATION_SCHEMA.required.map((key) => [key, r.data[key]]));
+  return { ok: true, data: { ...fields, ...scan(r.data) }, provider: r.provider, model: r.model };
 }

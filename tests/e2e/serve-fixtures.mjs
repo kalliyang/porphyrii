@@ -17,7 +17,7 @@ const server = createServer(async (req, res) => {
     for await (const chunk of req) body += chunk;
     const input = JSON.parse(body || "{}").text ?? "";
     res.setHeader("Content-Type", "application/json");
-    if (url.pathname === "/api/validate") return res.end(JSON.stringify({ ok: true, input_has_macron: false }));
+    if (url.pathname === "/api/validate") return res.end(JSON.stringify({ ok: true, input_has_macron: false, validate_token: "fixture" }));
     const prose = /^Gallia|^Quo usque/i.test(input);
     const restored = input.split("\n").map((line) => gold.find((g) => strip(g.input) === strip(line))?.input.replace(/[()]/g, "") ?? line).join("\n");
     const data = resolveScansion({ language: "la", spelling_corrected: false, correction_reason: null,

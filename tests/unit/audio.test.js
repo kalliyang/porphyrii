@@ -140,3 +140,18 @@ test("play() on a missing driver stays in load-error (no silent failure)", async
   await c.play("x");
   assert.equal(c.state, "load-error");
 });
+
+test("a failed playback can recover on stop and reuse the loaded driver", async () => {
+  let loads = 0;
+  let plays = 0;
+  const driver = { async playIPA() { if (++plays === 1) throw Error("device unavailable"); } };
+  const audio = new AudioController({ loadDriver: async () => { loads++; return driver; } });
+  await audio.play("a");
+  assert.equal(audio.state, "load-error");
+  audio.stop();
+  assert.equal(audio.state, "ready");
+  await audio.play("a");
+  assert.equal(audio.state, "ready");
+  assert.equal(plays, 2);
+  assert.equal(loads, 1);
+});

@@ -16,9 +16,11 @@
 
 import {
   buildScansionView,
+  meterLabel,
   validatorNotices,
 } from "./app/scansion-view.js";
 import { deriveIpa } from "./app/ipa.js";
+import { unlockAudio } from "./core/espeak-wasm-driver.js";
 import { AudioController } from "./app/audio.js";
 import { TurnstileManager } from "./app/turnstile.js";
 import { saveScansion, getHistory, deleteRecord } from "./app/db.js";
@@ -38,8 +40,8 @@ const STAGE_VALIDATING = "Checking input…";
 const STAGE_ANALYZING = [
   { atMs: 0, text: "Restoring macrons & scanning meter…" },
   { atMs: 20_000, text: "Still working — the engine is reasoning through your passage…" },
-  { atMs: 60_000, text: "Taking longer than usual — the fallback provider may be handling your request…" },
-  { atMs: 120_000, text: "Complex passage — analysis can take up to 3–4 minutes. Thank you for your patience…" },
+  { atMs: 50_000, text: "Taking longer than usual — the fallback provider may be handling your request…" },
+  { atMs: 80_000, text: "Complex passage — analysis can take up to about 2 minutes. Thank you for your patience…" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -325,7 +327,7 @@ async function onAnalyze() {
     }
     let a;
     try {
-      a = await postJson("/api/analyze", { text, turnstile_token: token2 }, signal);
+      a = await postJson("/api/analyze", { text, turnstile_token: token2, validate_token: v.data.validate_token }, signal);
       if (signal.aborted) return;
     } catch (err) {
       if (signal.aborted) return;
@@ -417,6 +419,7 @@ function renderResult(contract, { input, save }) {
       originalTextCleaned: contract.original_text_cleaned,
       scansionText: contract.scansion_text,
       spellingCorrected: contract.spelling_corrected === true,
+      allowModelElisionParens: contract.scansion_version == null,
     });
   } catch {
     integrity = null; // the check must never break result rendering
@@ -466,7 +469,7 @@ function renderResult(contract, { input, save }) {
   let notices = [];
   let validation = null;
   try {
-    validation = validateScansion(contract);
+    validation = validateScansion(contract, { preservedInput: input });
     currentResult.checked = validation.checked;
     notices = validatorNotices(validation);
   } catch {
@@ -626,9 +629,9 @@ function renderAudioState(state) {
     case "load-error":
       btn.disabled = false;
       els.playLabel.textContent = "Retry";
-      els.audioStatus.textContent = offlineError()
+      els.audioStatus.textContent = !audio.driver && offlineError()
         ? "Pronunciation requires a one-time download — reconnect and retry."
-        : "The recitation engine failed to load. Please retry; the IPA transcription below still works.";
+        : audio.driver ? "Playback failed. Please retry." : "The recitation engine failed to load. Please retry; the IPA transcription below still works.";
       break;
   }
 }
@@ -636,6 +639,7 @@ function renderAudioState(state) {
 audio.onStateChange(renderAudioState);
 
 els.playBtn.addEventListener("click", () => {
+  if (audio.state !== "playing") unlockAudio();
   if (!currentResult) return;
   const ipa = ensureIpa();
   if (!ipa || !ipa.ok) {
@@ -652,7 +656,7 @@ els.readingSpeed?.addEventListener("change", () => {
 
 
 async function persistHistory(contract, input) {
-  const snippet = (input.split(/\r?\n/).find((l) => l.trim().length > 0) ?? "").trim();
+  const snippet = (input.split(/\r\n|\r|\n/).find((l) => l.trim().length > 0) ?? "").trim();
   try {
     await saveScansion({
       createdAt: new Date().toISOString(),
@@ -680,7 +684,7 @@ function historyItemNode(record) {
   const when = new Date(record.createdAt);
   const stamp = Number.isNaN(when.getTime()) ? "" : when.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
   open.appendChild(
-    el("span", { className: "history-meta", text: `${stamp} · ${record.meter.replace(/_/g, " ")}` })
+    el("span", { className: "history-meta", text: `${stamp} · ${meterLabel(record.meter)}` })
   );
   open.addEventListener("click", () => {
     if (flowState === "validating" || flowState === "analyzing") {

@@ -1,6 +1,6 @@
 /** Bounded dactylic metre solver. Preserve source text and disclose quantity alternatives. */
 import { analyzeLatin } from "./latin-g2p.js";
-import { normalizeLatin } from "../services/text-integrity.js";
+import { alignSourceWords, lineWords, normalizeLatin } from "../services/text-integrity.js";
 
 export const SCANSION_VERSION = 1;
 const MAX_CANDIDATES = 256;
@@ -44,14 +44,14 @@ function fits(syllable, weight) {
 }
 
 function canElideInto(word) {
-  const onset = pronounced(word).normalize("NFC").replace(/^h/i, "");
-  if (/^ī/i.test(onset)) return true;
-  const key = bare(onset);
-  if (/^i[aeiouy]/.test(key)) return false; // consonantal initial i
-  return /^[aeiouy]/.test(key);
+  const raw = pronounced(word).normalize("NFC");
+  if (/^[īĭūŭ]/iu.test(raw)) return true;
+  if (/^[iu][aeiouyāēīōūȳăĕĭŏŭ]/iu.test(raw)) return false;
+  if (/^v(?![aeiouyāēīōūȳăĕĭŏŭ])/iu.test(raw)) return true;
+  return /^[aeiouyāēīōūȳăĕĭŏŭ]/iu.test(raw.replace(/^h/i, ""));
 }
 
-function elisionForms(words) {
+function elisionForms(words, budget = MAX_CANDIDATES) {
   let states = [{ words: [], cost: 0 }];
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
@@ -67,10 +67,10 @@ function elisionForms(words) {
     if (canElide && /^[ae]um$/i.test(tail[0])) {
       choices.splice(1, 0, { text: word.slice(0, -2) + `(${word.slice(-2)})`, cost: 0 });
     }
+    if (states.length * choices.length > budget) return null;
     states = states.flatMap((state) => choices.map((choice) => ({
       words: [...state.words, choice.text], cost: state.cost + choice.cost,
     })));
-    if (states.length > MAX_CANDIDATES) return null;
   }
   return states;
 }
@@ -141,7 +141,7 @@ function pronunciationRecipe(candidate) {
     }
     const stem = pronounced(word);
     const joins = word.includes("(") && i + 1 < candidate.words.length &&
-      (override?.joinNext || /^(?:[^aeiouyāēīōūȳăĕĭŏŭ]+|qu|i)$/iu.test(stem));
+      (override?.joinNext || stem === "" || /^(?:[^aeiouyāēīōūȳăĕĭŏŭ]+|qu|i)$/iu.test(stem));
     if (joins) {
       prefix += word;
       splitPrefix += /^i$/i.test(stem) ? "j" : split;
@@ -196,9 +196,9 @@ function candidateScan(candidate, meter) {
   return matches;
 }
 
-function glideCandidates(candidate) {
+function glideCandidates(candidate, remainingBudget, baseSyllables) {
   const results = [];
-  candidate.words.forEach((word, wordIndex) => {
+  for (const [wordIndex, word] of candidate.words.entries()) {
     const stem = pronounced(word);
     const next = candidate.words[wordIndex + 1];
     const joinsVowel = word.endsWith(")") && next && canElideInto(next);
@@ -214,12 +214,13 @@ function glideCandidates(candidate) {
       const glide = letter === "i" ? "j" : "w";
       const split = before + (stem[i] === letter ? glide : glide.toUpperCase()) + stem.slice(i + 1);
       const local = [{ line: 0, word: 0, split }];
-      const syllables = (options) => analyzeLatin(word, options).lines[0].words[0].syllableCount;
-      if (syllables({ overrides: local }) !== syllables() - 1) continue;
+      if (results.length >= remainingBudget) return null;
+      const count = analyzeLatin(word, { overrides: local }).lines[0].words[0].syllableCount;
+      if (count !== baseSyllables(word) - 1) continue;
       results.push({ ...candidate, cost: candidate.cost + 2,
         overrides: [{ line: 0, word: wordIndex, split, joinNext }] });
     }
-  });
+  }
   return results;
 }
 
@@ -233,9 +234,9 @@ function toggleQuantity(vowel) {
  * Italia's poetic initial quantity is attested in the reference verse corpus.
  * venit/venit distinguishes the present from the perfect; metre supplies evidence.
  */
-function quantityCandidates(words) {
+function quantityCandidates(words, preservedWords, budget) {
   let states = [{ words: [], cost: 0, quantityChanges: [] }];
-  for (const source of words) {
+  for (const [index, source] of words.entries()) {
     const word = source.normalize("NFC");
     const key = bare(word);
     const forms = [word];
@@ -248,11 +249,14 @@ function quantityCandidates(words) {
     } else if (/^ital(?:ia|iam|iae|ias|iis|iarum|us|i|o|os|orum)$/.test(key)) {
       forms.push(word.replace(/^[iī]/i, toggleQuantity));
     }
-    states = states.flatMap((state) => [...new Set(forms)].map((form) => ({
+    const preserved = preservedWords[index] ?? "";
+    const allowed = [...new Set(forms)].filter((form) => form === word ||
+      ![...word].some((ch, i) => ch !== form[i] && /[\u0304\u0306]/u.test((preserved[i] ?? "").normalize("NFD"))));
+    if (states.length * allowed.length - 1 > budget) return null;
+    states = states.flatMap((state) => allowed.map((form) => ({
       words: [...state.words, form], cost: state.cost + (form === word ? 0 : 4),
       quantityChanges: form === word ? state.quantityChanges : [...state.quantityChanges, `${word} → ${form}`],
     })));
-    if (states.length > MAX_CANDIDATES) return null;
   }
   return states.filter((state) => state.quantityChanges.length);
 }
@@ -261,7 +265,7 @@ function quantityCandidates(words) {
 export function scanVerseLine(text, meter, options = {}) {
   const fail = (status, note) => ({ text, meter, status, feet: [], foot_types: [], note });
   if (!metreTemplates(meter).length) return fail("unsupported", "This metre is outside the supported dactylic patterns.");
-  const words = text.normalize("NFC").match(/[\p{L}\p{M}()]+/gu) ?? [];
+  const words = lineWords(text);
   if (!words.length || words.some((w) => !/^(?:[\p{L}\p{M}]|\([\p{L}\p{M}]+\))+$/u.test(w))) {
     return fail("unresolved", "The syllables could not be read. Check the text and quantity marks.");
   }
@@ -273,28 +277,43 @@ export function scanVerseLine(text, meter, options = {}) {
   const candidates = elisionForms(words);
   if (!candidates) return fail("unresolved", "Too many possible elisions; try a shorter verse line.");
   let evaluated = candidates.length;
+  const counts = new Map();
+  const baseSyllables = (word) => {
+    if (!counts.has(word)) counts.set(word, analyzeLatin(word).lines[0].words[0].syllableCount);
+    return counts.get(word);
+  };
+  function expandGlides(readings) {
+    const result = [];
+    for (const reading of readings) {
+      const next = glideCandidates(reading, MAX_CANDIDATES - evaluated, baseSyllables);
+      if (!next) return null;
+      evaluated += next.length;
+      result.push(...next);
+    }
+    return result;
+  }
   let matches = candidates.flatMap((c) => candidateScan(c, meter));
   if (!matches.length) {
-    const glides = candidates.flatMap(glideCandidates);
-    evaluated += glides.length;
-    if (evaluated > MAX_CANDIDATES) return fail("unresolved", "Too many possible readings; check this line against your text.");
+    const glides = expandGlides(candidates);
+    if (!glides) return fail("unresolved", "Too many possible readings; check this line against your text.");
     matches = glides.flatMap((c) => candidateScan(c, meter));
   }
   if (!matches.length && options.allowQuantityVariants) {
-    const quantities = quantityCandidates(words);
+    const preserved = alignSourceWords(lineWords(options.preservedInput ?? ""), words);
+    const quantities = quantityCandidates(words, preserved, MAX_CANDIDATES - evaluated);
     if (!quantities) return fail("unresolved", "Too many quantity alternatives; check the text's markings.");
     const readings = [];
     for (const variant of quantities) {
-      const elisions = elisionForms(variant.words);
+      const elisions = elisionForms(variant.words, MAX_CANDIDATES - evaluated);
       if (!elisions) return fail("unresolved", "Too many possible readings; check this line against your text.");
       for (const reading of elisions) {
         readings.push({ ...reading, cost: reading.cost + variant.cost, quantityChanges: variant.quantityChanges });
-        if (readings.length + evaluated > MAX_CANDIDATES) return fail("unresolved", "Too many possible readings; check this line against your text.");
+        evaluated++;
       }
     }
-    const expanded = [...readings, ...readings.flatMap(glideCandidates)];
-    if (expanded.length + evaluated > MAX_CANDIDATES) return fail("unresolved", "Too many possible readings; check this line against your text.");
-    matches = expanded.flatMap((c) => candidateScan(c, meter));
+    const glides = expandGlides(readings);
+    if (!glides) return fail("unresolved", "Too many possible readings; check this line against your text.");
+    matches = [...readings, ...glides].flatMap((c) => candidateScan(c, meter));
   }
   if (!matches.length) return fail("unresolved", "No supported pattern fits these vowel quantities. Check the macrons or any exceptional reading.");
   const minCost = Math.min(...matches.map((m) => m.cost));
@@ -308,12 +327,13 @@ export function scanVerseLine(text, meter, options = {}) {
 }
 
 /** Build the application result from restored text, never from model-supplied feet. */
-export function resolveScansion(data) {
+export function resolveScansion(data, preservedInput = data.original_text_cleaned ?? "") {
+  const preserved = preservedInput.split(/\r\n|\r|\n/).filter((line) => normalizeLatin(line));
   const textLines = data.scansion_text.split(/\r\n|\r|\n/).filter((line) => normalizeLatin(line));
   const scansion = textLines.map((text, index) => {
     const meter = expectedLineMeter(data.meter, index);
     if (meter === "prose") return { line: index + 1, text, feet: [], foot_types: [], status: "prose", note: null };
-    return { line: index + 1, ...scanVerseLine(text, meter, { allowQuantityVariants: data.allow_quantity_variants === true }) };
+    return { line: index + 1, ...scanVerseLine(text, meter, { allowQuantityVariants: data.allow_quantity_variants ?? Boolean(data.original_text_cleaned), preservedInput: preserved[index] }) };
   });
   return { ...data, scansion_version: SCANSION_VERSION, scansion, meter_confidence: scansion.some((line) => !["resolved", "prose"].includes(line.status)) ? "low" : data.meter_confidence };
 }

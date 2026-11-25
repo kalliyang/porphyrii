@@ -95,7 +95,7 @@ function checkedReading(text, meter = "dactylic_hexameter") {
     text.normalize("NFC").replace(/[^\p{L}]/gu, ""));
   const ipa = deriveIpa(result);
   assert.ok(ipa.ok);
-  return { ...line.pronunciation, ipa: ipa.lines[0].ipa };
+  return { line, ...line.pronunciation, ipa: ipa.lines[0].ipa };
 }
 
 for (const [reference, text, liaison, meter] of [
@@ -162,4 +162,63 @@ test("unpronounceable abbreviations do not enable recitation", () => {
   const result = resolveScansion({ scansion_text: "S. P. Q. R.", meter: "prose" });
   assert.deepEqual(deriveIpa(result), { ok: false, lines: [], problems: [],
     error: "Pronunciation is unavailable for this result." });
+});
+
+test("vocalic and consonantal initial u and V keep their proper metrical slots", () => {
+  const first = checkedReading("Arma uirumque canō, Troiae quī prīmus ab ōrīs");
+  const next = checkedReading("Vrbs antīqua fuit, Tyriī tenuēre colōnī");
+  assert.deepEqual(first.line.feet[0].map((s) => s.s), ["Ar", "ma", "ui"]);
+  assert.deepEqual(first.line.feet[1].map((s) => s.s), ["rum", "que", "ca"]);
+  assert.doesNotMatch(first.line.pronunciation.text, /Arm\(a\)/);
+  assert.match(next.ipa, /^ˈʊrbs/);
+});
+
+test("intervocalic i survives final elision and initial hi permits elision", () => {
+  const troia = checkedReading("nōs Troiā antīquā, sī vestrās forte per aurēs");
+  assert.equal(troia.line.pattern, "HH|HH|HH|HH|HLL|HX");
+  assert.match(troia.ipa, /^ˈnoːs ˈtrɔj\.jan\.ˈtiː\.kʷaː/);
+  assert.match(checkedReading("lītora, Troiam ille et terrīs iactātus et altō").line.pronunciation.text, /Troi\(am\) ill\(e\)/);
+  assert.match(checkedReading("noctem hiememque ferēns, et inhorruit unda tenebrīs").line.pronunciation.text, /^noct\(em\) hiememque/);
+});
+
+test("editorial asides remain in both the metrical and spoken readings", () => {
+  const source = "corpora; dī, coeptīs (nam vōs mūtāstis et illās)";
+  const { line, ipa } = checkedReading(source);
+  assert.equal(line.text, source);
+  assert.equal(line.pattern, "HLL|HH|HH|HH|HLL|HX");
+  assert.match(line.pronunciation.text, /nam vōs mūtāstis et illās$/);
+  assert.equal(ipa, checkedReading(source.replace(/[()]/g, "")).ipa);
+});
+
+test("adjacent elisions retain the silent h and require a complete hexameter", () => {
+  const source = "lītora, cum hī omnēs, Troiae quī prīmus ab ōrīs";
+  const regular = checkedReading(source.replace("omnēs,", "omnēs tum,")).line;
+  assert.equal(regular.cost, 0);
+  assert.equal(regular.pattern, "HLL|HH|HH|HH|HLL|HX");
+  assert.match(regular.pronunciation.text, /c\(um\)\(ī\)omnēs/);
+  assert.equal(checkedReading(source).line.cost, 1);
+});
+
+test("glide expansion stops at the shared candidate limit", () => {
+  const line = scanVerseLine("a ".repeat(8) + "bia".repeat(30), "dactylic_hexameter");
+  assert.equal(line.status, "unresolved");
+  assert.match(line.note, /Too many possible readings/);
+});
+
+test("quantity alternatives respect the input marks at each vowel", () => {
+  const text = "gēns inimīca mihi Tyrrhēnum nāvigat aequor";
+  const scan = (preservedInput) => scanVerseLine(text, "dactylic_hexameter", { preservedInput, allowQuantityVariants: true });
+  assert.match(scan(text).pronunciation.text, /mihī/);
+  assert.equal(scan(text.replace("mihi", "mihĭ")).status, "unresolved");
+});
+
+test("a consistently unsupported metre has one passage notice", () => {
+  const result = resolveScansion({ scansion_text: Array(20).fill("māla").join("\n"), meter: "other:hendecasyllabic" });
+  const validation = validateScansion(result);
+  assert.ok(validation.ok);
+  const view = buildScansionView(result, validation);
+  assert.match(view.confidenceNotice, /outside/);
+  assert.ok(view.lines.every((line) => line.text === "māla" && line.note === null));
+  result.scansion[0].status = "resolved";
+  assert.equal(validateScansion(result).lines[0].ok, false);
 });

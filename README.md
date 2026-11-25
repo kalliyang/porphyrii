@@ -10,7 +10,7 @@ The browser checks the metrical reading, transcribes Latin to IPA, and reads it 
 with eSpeak NG WebAssembly. Once the app is cached, these tools and passages saved
 in IndexedDB are available offline. No account is required.
 
-**Current version** v0.9.1, November 2026. [porphyrii.org](https://porphyrii.org)
+**Current version** v1.0.0, November 2026. [porphyrii.org](https://porphyrii.org)
 
 ## How it works
 

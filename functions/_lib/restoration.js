@@ -1,4 +1,5 @@
-import { normalizeLatin } from "../../services/text-integrity.js";
+import { validateSupportedCharset, validateParentheses } from "./precheck.js";
+import { alignSourceWords, lineSignature, lineWords, normalizeLatin } from "../../services/text-integrity.js";
 
 const string = { type: "string" };
 export const GUARD_SCHEMA = {
@@ -23,7 +24,18 @@ export const RESTORATION_SCHEMA = {
 };
 
 const lines = (text) => text.split(/\r\n|\r|\n/).filter((line) => normalizeLatin(line));
-const markedLetters = (text) => text.normalize("NFD").toLowerCase().replaceAll("j", "i").replaceAll("v", "u").replace(/[^\p{L}\p{M}]/gu, "");
+function preservesMarks(input, restored) {
+  const target = lineWords(restored);
+  const aligned = alignSourceWords(lineWords(input), target);
+  const letters = (s) => [...s.replace(/[()]/g, "").normalize("NFC")];
+  const mark = (letter) => letter.normalize("NFD").slice(1);
+  return aligned.every((word, i) => {
+    if (!word) return true;
+    const output = letters(target[i]);
+    return letters(word).every((ch, j) =>
+      mark(ch) ? mark(ch) === mark(output[j]) : mark(output[j]) !== "\u0306");
+  });
+}
 
 export function validateRestoration(data, input, hasMacron) {
   const errors = [];
@@ -41,23 +53,32 @@ export function validateRestoration(data, input, hasMacron) {
     if (data[field].length > limit) errors.push(`${field} exceeds its size limit`);
   }
   if (data.correction_reason?.length > 2000) errors.push("correction_reason exceeds its size limit");
+  if (errors.length) return { ok: false, errors };
   const original = lines(input);
   const restored = lines(data.scansion_text);
   if (restored.length !== original.length) errors.push("preserve the input line count");
   const cleaned = lines(data.original_text_cleaned);
   if (cleaned.length !== original.length) errors.push("preserve the original line count");
-  cleaned.forEach((line, i) => {
-    const letters = normalizeLatin(line);
-    if (letters !== normalizeLatin(original[i]) &&
-        !(data.spelling_corrected && letters === normalizeLatin(restored[i]))) {
+  for (const field of ["scansion_text", "original_text_cleaned"]) {
+    for (const validate of [validateSupportedCharset, validateParentheses]) {
+      const check = validate(data[field]);
+      if (!check.ok) errors.push(`${field}: ${check.reason}`);
+    }
+  }
+  original.forEach((line, i) => {
+    const source = lineSignature(line);
+    const reading = restored[i] ?? "";
+    const target = lineSignature(reading);
+    const copy = lineSignature(cleaned[i] ?? "");
+    if (source !== copy && !(data.spelling_corrected && copy === target)) {
       errors.push(`line ${i + 1}: original_text_cleaned differs from both the input and the declared reading`);
     }
+    if (!data.spelling_corrected && source !== target) {
+      errors.push(lineSignature(line, true) !== lineSignature(reading, true)
+        ? `line ${i + 1}: preserve word boundaries and letters`
+        : `line ${i + 1}: preserve the input's elision parentheses without adding new ones`);
+    }
+    if (hasMacron && !preservesMarks(line, reading)) errors.push(`line ${i + 1}: preserve the user's existing quantity marks exactly`);
   });
-  if (hasMacron && markedLetters(input) !== markedLetters(data.scansion_text)) errors.push("preserve the user's existing quantity marks exactly");
-  if (!data.spelling_corrected) {
-    original.forEach((line, i) => {
-      if (normalizeLatin(line) !== normalizeLatin(restored[i] ?? "")) errors.push(`line ${i + 1}: restored letters do not match the input`);
-    });
-  }
   return { ok: errors.length === 0, errors };
 }

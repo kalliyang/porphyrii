@@ -93,8 +93,9 @@ test("pass: mixed precomposed/combining macron forms", () => {
   assert.equal(r.status, "pass");
 });
 
-test("pass: elision parentheses in scansion_text", () => {
+test("legacy records can add elision parentheses in scansion_text", () => {
   const r = verifyIntegrity({
+    allowModelElisionParens: true,
     userInput: "litora, multum ille et terris",
     originalTextCleaned: "litora, multum ille et terris",
     scansionText: "lītora, mult(um) ill(e) et terrīs",
@@ -233,4 +234,23 @@ test("diffLines: inserted and deleted lines", () => {
     { type: "del", text: "x" },
     { type: "same", text: "b" },
   ]);
+});
+
+test("word boundaries, supplied parentheses and output diacritics agree across both checks", async () => {
+  const { validateRestoration } = await import("../../functions/_lib/restoration.js");
+  for (const [input, altered] of [["Troiae", "Troi ae"], ["Arma virumque", "Armavirumque"],
+    ["Arma", "Ar(ma)"], ["Arma", "(Arma)"], ["mult(um)", "multum"], ["poeta", "poëta"],
+    ["hymnus", "hy\u0306mnus"], ["caelum", "cælum"], ["arma", "(arma"]]) {
+    for (const field of ["original_text_cleaned", "scansion_text"]) {
+      const data = { original_text_cleaned: input, scansion_text: input, [field]: altered,
+        language: "la", spelling_corrected: false, correction_reason: null, meter: "prose",
+        meter_confidence: "high", translation: "A reading.", grammar_notes: "" };
+      const integrity = verifyIntegrity({ userInput: input, originalTextCleaned: data.original_text_cleaned, scansionText: data.scansion_text });
+      assert.equal(integrity.status, "fail", altered);
+      const check = field === "scansion_text" ? integrity.checkB : integrity.checkA;
+      assert.deepEqual(check.diff.map((op) => op.type), ["del", "add"]);
+      assert.equal(validateRestoration(data, input, false).ok, false, altered);
+    }
+  }
+  assert.ok(verifyIntegrity({ userInput: "arma (virumque)", originalTextCleaned: "arma (virumque)", scansionText: "arma (virumque)" }).checkB.ok);
 });

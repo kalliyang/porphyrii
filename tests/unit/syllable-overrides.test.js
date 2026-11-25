@@ -222,3 +222,8 @@ test("transport: synizesis needing letter substitution is a reported problem", (
     })
   );
 });
+
+test("a liaison syllable can carry its omitted vowel in old saved readings", () => {
+  const contract = { scansion_text: "ill(e) et", scansion: [{ line: 1, feet: [[{ s: "il" }, { s: "l(e)et" }]] }] };
+  assert.deepEqual(contractSyllableOverrides(contract), { overrides: [], problems: [] });
+});

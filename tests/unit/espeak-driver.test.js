@@ -6,7 +6,7 @@
  *   2. playChunks() — the sequential playback loop with injected stages
  *      (stop semantics without WebAudio).
  *   3. Integration smoke against the REAL vendored artifacts (Node):
- *      importing the module starts the engine init; playIPA() in Node gets
+ *      playIPA() in Node gets
  *      all the way through init + mapping + synthesis and only stops at the
  *      (absent) AudioContext — proving the vendored wasm/data/la.json work
  *      from the integrated layout. The vendored driver itself is additionally
@@ -117,8 +117,7 @@ test("playChunks: stop during playback cancels the remaining queue", async () =>
 
 /* ------------------------------------------- integration smoke (real wasm)
  *
- * Importing core/espeak-wasm-driver.js already kicked off the engine init
- * (module side effect, by design). In Node, playIPA() therefore runs the
+ * In Node, playIPA() runs the
  * full pipeline — init from the vendor/ layout, mapping load, golden-IPA
  * synthesis — and only fails at WebAudio playback, which does not exist in
  * Node. Anything earlier in the chain failing would surface as a different
@@ -148,4 +147,26 @@ test("integration: vendored driver synthesizes non-silent PCM from golden IPA", 
 
 test("integration: stop() with nothing playing is a safe no-op", () => {
   assert.doesNotThrow(() => stop());
+});
+
+test("stopping during audio context resume leaves the synthesized chunk silent", async (t) => {
+  const entered = Promise.withResolvers();
+  const resumed = Promise.withResolvers();
+  let starts = 0;
+  let buffers = 0;
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "AudioContext");
+  t.after(() => previous ? Object.defineProperty(globalThis, "AudioContext", previous) : delete globalThis.AudioContext);
+  globalThis.AudioContext = class {
+    state = "suspended";
+    resume() { entered.resolve(); return resumed.promise; }
+    createBuffer() { buffers++; return { getChannelData: () => [] }; }
+    createBufferSource() { return { connect() {}, start() { starts++; this.onended(); } }; }
+  };
+  const playing = playIPA(GOLD_LINE1);
+  await entered.promise;
+  stop();
+  resumed.resolve();
+  await playing;
+  assert.equal(buffers, 0);
+  assert.equal(starts, 0);
 });

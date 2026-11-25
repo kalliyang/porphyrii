@@ -1,5 +1,6 @@
 
-import { verifyTurnstile } from "../_lib/turnstile.js";
+import { verifyValidationTicket } from "../_lib/ticket.js";
+import { verifyTurnstile, UNAVAILABLE } from "../_lib/turnstile.js";
 import { precheck } from "../_lib/precheck.js";
 import { checkRateLimit } from "../_lib/ratelimit.js";
 import { runSolver } from "../_lib/llm.js";
@@ -18,7 +19,13 @@ export async function onRequestPost(context) {
     return json({ ok: false, reject_reason: "Please complete human verification and try again." }, 400);
   }
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-  const ts = await verifyTurnstile(env.TURNSTILE_SECRET, token, ip);
+  if (!env.TURNSTILE_SECRET?.trim()) {
+    return json({ ok: false, reject_reason: UNAVAILABLE }, 503, { "Retry-After": "300" });
+  }
+  if (!await verifyValidationTicket(env.TURNSTILE_SECRET, body.validate_token, ip, body.text)) {
+    return json({ ok: false, reject_reason: "Please validate the passage before running analysis." }, 400);
+  }
+  const ts = await verifyTurnstile(env.TURNSTILE_SECRET, token, ip, request.signal);
   if (!ts.ok) {
     return json(
       { ok: false, reject_reason: ts.reason, verify_codes: ts.codes ?? null },
@@ -26,6 +33,7 @@ export async function onRequestPost(context) {
     );
   }
 
+  request.signal?.throwIfAborted();
   const rl = await checkRateLimit(env, ip, "analyze");
   if (!rl.ok) {
     return json({ ok: false, reject_reason: rl.reason }, rl.status, {

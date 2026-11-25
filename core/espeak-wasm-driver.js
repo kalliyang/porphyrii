@@ -22,11 +22,8 @@
  *   3. Wiring: artifact URLs are resolved relative to this module, so callers
  *      never deal with vendor paths.
  *
- * Lifecycle: importing this module starts the one-time engine load
- * immediately — app/audio.js's dynamic import is the "loading" state,
- * so the wasm/data fetch and compile overlap with it. A failed
- * init clears the in-flight promise so the Retry path re-initializes cleanly
- * (the vendored init is itself re-initializable after failure).
+ * ready() loads the engine on demand. Unlocking the audio context during a
+ * click does not fetch the voice data.
  *
  * Input: IPA strings from app/ipa.js deriveIpa(contract).lines — the G2P
  * engine's output, stress marks and syllable dots included; the vendored
@@ -66,19 +63,13 @@ function ensureInit() {
       ]);
       await vendor.init({ wasmURL, dataURL });
     })();
-    // A rejected init must not poison retries: clear the cached promise so
-    // the next playIPA() starts a fresh init. The .catch also suppresses the
-    // otherwise-unhandled rejection from the eager load below.
+    // A failed load can be retried on the next click.
     _initPromise.catch(() => {
       _initPromise = null;
     });
   }
   return _initPromise;
 }
-
-// Eager: the dynamic import of this module is the audio controller's
-// "loading" state — start the one-time download/compile now, not on Play.
-ensureInit();
 
 /**
  * Resolves when the one-time engine load has finished (or rejects with the
@@ -137,7 +128,17 @@ let _audioCtx = null; // shared AudioContext (created on first playback)
 let _currentSrc = null; // AudioBufferSourceNode currently sounding
 let _playGen = 0; // generation token; stop()/new playIPA() invalidates loops
 
-function playPcm(pcm, sampleRate) {
+export function unlockAudio() {
+  const Ctor = globalThis.AudioContext ?? globalThis.webkitAudioContext;
+  if (!Ctor) return;
+  try {
+    if (_audioCtx?.state === "closed") _audioCtx = null;
+    _audioCtx ??= new Ctor();
+    if (_audioCtx.state !== "running") _audioCtx.resume().catch(() => {});
+  } catch { /* Playback reports device errors through the controller. */ }
+}
+
+function playPcm(pcm, sampleRate, isStopped) {
   const Ctor = globalThis.AudioContext ?? globalThis.webkitAudioContext;
   if (!Ctor) {
     return Promise.reject(
@@ -148,23 +149,23 @@ function playPcm(pcm, sampleRate) {
   _audioCtx ??= new Ctor();
   const resume =
     _audioCtx.state !== "running" ? _audioCtx.resume() : Promise.resolve();
-  return resume.then(
-    () =>
-      new Promise((resolve) => {
-        const buf = _audioCtx.createBuffer(1, pcm.length, sampleRate);
-        const channel = buf.getChannelData(0);
-        for (let i = 0; i < pcm.length; i++) channel[i] = pcm[i] / 32768;
-        const src = _audioCtx.createBufferSource();
-        src.buffer = buf;
-        src.connect(_audioCtx.destination);
-        _currentSrc = src;
-        src.onended = () => {
-          if (_currentSrc === src) _currentSrc = null;
-          resolve();
-        };
-        src.start();
-      })
-  );
+  return resume.then(() => {
+    if (isStopped()) return;
+    return new Promise((resolve) => {
+      const buf = _audioCtx.createBuffer(1, pcm.length, sampleRate);
+      const channel = buf.getChannelData(0);
+      for (let i = 0; i < pcm.length; i++) channel[i] = pcm[i] / 32768;
+      const src = _audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(_audioCtx.destination);
+      _currentSrc = src;
+      src.onended = () => {
+        if (_currentSrc === src) _currentSrc = null;
+        resolve();
+      };
+      src.start();
+    });
+  });
 }
 
 /**
@@ -182,7 +183,7 @@ export async function playChunks(chunks, { synthesize, play, isStopped, pause })
     if (isStopped()) return false;
     const { pcm, sampleRate } = await synthesize(chunk);
     if (isStopped()) return false;
-    await play(pcm, sampleRate);
+    await play(pcm, sampleRate, isStopped);
     if (pause && index + 1 < chunks.length && !isStopped()) await pause();
   }
   return true;
@@ -199,8 +200,8 @@ export async function playChunks(chunks, { synthesize, play, isStopped, pause })
  * @param {object} [options] { rate?: 80–450, pitch?: 0–99 } (vendor contract)
  */
 export async function playIPA(ipa, options = {}) {
-  await ensureInit();
   const gen = ++_playGen;
+  await ensureInit();
   await playChunks(chunkIpa(ipa), {
     synthesize: (chunk) => vendor.synthesize(chunk, options),
     play: playPcm,

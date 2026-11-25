@@ -1,3 +1,5 @@
+import { validateSupportedCharset, validateParentheses } from "../../core/latin-text.js";
+export { validateSupportedCharset, validateParentheses };
 
 
 
@@ -9,7 +11,6 @@ const CONTROL_CHAR_RE =
   /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/;
 
 const LATIN_LETTER_RE = /\p{Script=Latin}/gu;
-const SUPPORTED_LETTER = /^[A-Za-zĀāĒēĪīŌōŪūȲȳĂăĔĕĬĭŎŏŬŭ]$/u;
 
 export const MAX_INPUT_CHARS = 2000;
 
@@ -43,14 +44,12 @@ export function precheck(text) {
       reason: "The text contains unsupported control characters. Please paste plain text.",
     };
   }
+  const charset = validateSupportedCharset(text);
+  if (!charset.ok) return charset;
+  const parentheses = validateParentheses(text);
+  if (!parentheses.ok) return parentheses;
   const normalized = text.normalize("NFC");
-  if (/[æœ]/iu.test(normalized)) {
-    return { ok: false, reason: "Please write ae and oe as two letters instead of the ligatures æ and œ." };
-  }
   const latinLetters = normalized.match(LATIN_LETTER_RE) ?? [];
-  if (/\p{M}/u.test(normalized) || latinLetters.some((ch) => !SUPPORTED_LETTER.test(ch))) {
-    return { ok: false, reason: "Unsupported diacritics found. Please use plain Latin letters and standard macrons or breves (ā ē ī ō ū ȳ, ă ĕ ĭ ŏ ŭ) without accents or diaereses." };
-  }
   const letters = normalized.match(/\p{L}/gu) ?? [];
   if (latinLetters.length === 0) {
     return {

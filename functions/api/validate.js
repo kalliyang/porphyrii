@@ -1,5 +1,6 @@
 
-import { verifyTurnstile } from "../_lib/turnstile.js";
+import { signValidationTicket } from "../_lib/ticket.js";
+import { verifyTurnstile, UNAVAILABLE } from "../_lib/turnstile.js";
 import { precheck } from "../_lib/precheck.js";
 import { checkRateLimit } from "../_lib/ratelimit.js";
 import { runGuard } from "../_lib/llm.js";
@@ -18,7 +19,10 @@ export async function onRequestPost(context) {
     return json({ ok: false, reject_reason: "Please complete human verification and try again." }, 400);
   }
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-  const ts = await verifyTurnstile(env.TURNSTILE_SECRET, token, ip);
+  if (!env.TURNSTILE_SECRET?.trim()) {
+    return json({ ok: false, reject_reason: UNAVAILABLE }, 503, { "Retry-After": "300" });
+  }
+  const ts = await verifyTurnstile(env.TURNSTILE_SECRET, token, ip, request.signal);
   if (!ts.ok) {
     return json(
       { ok: false, reject_reason: ts.reason, verify_codes: ts.codes ?? null },
@@ -26,6 +30,7 @@ export async function onRequestPost(context) {
     );
   }
 
+  request.signal?.throwIfAborted();
   const rl = await checkRateLimit(env, ip, "validate");
   if (!rl.ok) {
     return json({ ok: false, reject_reason: rl.reason }, rl.status, {
@@ -50,13 +55,14 @@ export async function onRequestPost(context) {
       {
         ok: false,
         reject_reason:
-          guard.rejectReason ?? "This does not look like Classical Latin.",
+          guard.rejectReason?.trim() || "This does not look like Classical Latin.",
       },
       400
     );
   }
 
-  return json({ ok: true, input_has_macron: pre.has_macron }, 200);
+  const validate_token = await signValidationTicket(env.TURNSTILE_SECRET, ip, body.text);
+  return json({ ok: true, input_has_macron: pre.has_macron, validate_token }, 200);
 }
 
 export async function onRequest() {

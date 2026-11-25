@@ -35,10 +35,11 @@ export function confidenceNotice(confidence) {
 export function buildScansionView(contract, validation = null) {
   const meter = contract?.meter ?? "unknown";
   const confidence = contract?.meter_confidence ?? "low";
+  const outside = new Set(validation?.lines?.filter((line) => line.outside).map((line) => line.line));
   const lines = (contract?.scansion ?? []).map((entry) => ({
     line: entry.line,
     text: entry.text,
-    note: entry.note ?? null,
+    note: outside.has(entry.line) ? null : entry.note ?? null,
     feet: (validation?.lines?.some((line) => line.line === entry.line && !line.ok) ? [] : entry.feet ?? []).map((foot, fi) => ({
       type: Array.isArray(entry.foot_types) ? entry.foot_types[fi] ?? null : null,
       syllables: foot.map((syl) => ({
@@ -54,7 +55,7 @@ export function buildScansionView(contract, validation = null) {
     meter,
     meterLabel: meterLabel(meter),
     confidence,
-    confidenceNotice: confidenceNotice(confidence),
+    confidenceNotice: outside.size ? "This metre is outside the supported dactylic patterns. The restored text is shown below." : confidenceNotice(confidence),
     prose: meter === "prose",
     lines,
   };

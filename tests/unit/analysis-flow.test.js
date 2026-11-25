@@ -57,4 +57,21 @@ test("cancel and immediately analyze again while verification is pending", async
   const alerts = element("form-alerts").children;
   assert.equal(alerts.length, 1);
   assert.deepEqual(alerts[0].children.map((c) => c.textContent), ["This text can't be analyzed", "Selection is too long."]);
+  calls.length = 0;
+  globalThis.fetch.mock.mockImplementation(async (url, options) => {
+    const payload = JSON.parse(options.body);
+    calls.push([url, payload.turnstile_token, payload.validate_token]);
+    return url.endsWith("/validate")
+      ? Response.json({ ok: true, validate_token: "passage-ticket" })
+      : Response.json({ reject_reason: "Analysis unavailable." }, { status: 503 });
+  });
+  click("analyze-btn");
+  callbacks[2].callback("validation-challenge");
+  await settle();
+  callbacks[3].callback("analysis-challenge");
+  await settle();
+  assert.deepEqual(calls, [
+    ["/api/validate", "validation-challenge", undefined],
+    ["/api/analyze", "analysis-challenge", "passage-ticket"],
+  ]);
 });

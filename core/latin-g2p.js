@@ -1,3 +1,4 @@
+import { classifyParentheses, SUPPORTED_LETTER } from "./latin-text.js";
 
 
 
@@ -27,7 +28,7 @@ const MUTES = new Set(["p", "b", "t", "d", "k", "ɡ"]);
 const LIQUIDS = new Set(["r", "l"]);
 
 const VOWEL_LETTERS = new Set(["a", "e", "i", "o", "u", "y"]);
-const LETTER_RE = /^[A-Za-zāēīōūȳĀĒĪŌŪȲăĕĭŏŭĂĔĬŎŬ]$/;
+
 
 
 // Prefix table, including assimilated surface variants needed for
@@ -69,7 +70,7 @@ const FUNCTION_WORDS = new Set([
 ]);
 
 // Stress exceptions.
-const STRESS_FIRST_WORDS = new Set(["itaque"]); // ítaque, not *itáque
+const STRESS_FIRST_WORDS = new Set(["itaque", "denique", "undique", "utique"]);
 const STRESS_LAST_WORDS = new Set([
   "illic", "illuc", "istic", "istuc", "adhuc", // contracted -ce family
   "viden", "tanton", // apocopated -ne keeps full-form stress
@@ -92,7 +93,7 @@ function bareForm(ch) {
 // letters included — "atqu(e)" keys as "atque" so function-word and exception
 // lookups see the underlying word).
 function wordKey(surface) {
-  return [...surface.toLowerCase().normalize("NFC")].map(bareForm).join("");
+  return [...surface.toLowerCase().normalize("NFC")].map(bareForm).join("").replace(/^v(?![aeiouy])/, "u");
 }
 
 function isVowelLetter(bare) {
@@ -103,8 +104,7 @@ function isVowelLetter(bare) {
 function tokenizeLine(lineText) {
   const tokens = [];
   let cur = null;
-  let depth = 0;
-  let parenBuf = "";
+  let elision = null;
   const flush = (hard) => {
     if (cur) {
       cur.hardAfter = hard;
@@ -117,39 +117,25 @@ function tokenizeLine(lineText) {
       tokens[tokens.length - 1].hardAfter = true;
     }
   };
-  for (const ch of lineText.normalize("NFC")) {
-    if (ch === "(") {
-      if (depth === 0) (cur ??= { surface: "", pronounced: "", elided: [], hardAfter: false });
-      depth++;
-      if (depth > 1) parenBuf += ch; // tolerate nested parens literally
+  for (const ch of classifyParentheses(lineText, ",")) {
+    if (ch !== "(" && ch !== ")" && !SUPPORTED_LETTER.test(ch)) {
+      flush(!/\s/u.test(ch));
       continue;
     }
-    if (ch === ")" && depth > 0) {
-      depth--;
-      if (depth === 0) {
-        cur.elided.push(parenBuf);
-        parenBuf = "";
-      } else {
-        parenBuf += ch;
+    cur ??= { surface: "", pronounced: "", notation: "", elided: [], elidedVowelAfter: new Set() };
+    cur.notation += ch;
+    if (ch === "(") elision = "";
+    else if (ch === ")") {
+      cur.elided.push(elision);
+      if (cur.pronounced && isVowelLetter(bareForm(elision[0].toLowerCase()))) {
+        cur.elidedVowelAfter.add([...cur.pronounced].length - 1);
       }
-      continue;
-    }
-    if (LETTER_RE.test(ch)) {
-      (cur ??= { surface: "", pronounced: "", elided: [], hardAfter: false });
+      elision = null;
+    } else {
       cur.surface += ch;
-      if (depth > 0) parenBuf += ch;
-      else cur.pronounced += ch;
-      continue;
+      if (elision === null) cur.pronounced += ch;
+      else elision += ch;
     }
-    if (depth > 0) {
-      parenBuf += ch; // keep stray chars inside parens with the elision
-      continue;
-    }
-    if (/\s/.test(ch)) {
-      flush(false);
-      continue;
-    }
-    flush(true); // punctuation
   }
   flush(false);
   return tokens;
@@ -283,7 +269,7 @@ function lettersToPhonemes(letters, ctx) {
     // an indivisible, natural-heavy COMPOUND NUCLEUS. The off-glide renders
     // as its own phoneme (la.json has no uI row) but is not a coda
     // consonant: liaison must never move it ("cui erat" keeps cui heavy).
-    if (ctx.uiMonosyllable && b === "u" && bareAt(i + 1) === "i") {
+    if (ctx.uiMonosyllable && b === "u" && bareAt(i + 1) === "i" && !L.marked && !letters[i + 1].marked) {
       out.push(makePhoneme("ʊ", "v", i, i + 1, L.ch, { compound: true }));
       out.push(
         makePhoneme("j", "c", i + 1, i + 1, letters[i + 1].ch, { offglide: true })
@@ -310,7 +296,7 @@ function lettersToPhonemes(letters, ctx) {
           !letters[i + 1].marked;
         const listed =
           (pair === "eu" && ctx.euWord) || (pair === "ei" && ctx.eiWord);
-        if (always || listed) {
+        if (always || (listed && !L.marked && !letters[i + 1].marked)) {
           out.push(
             makePhoneme(DIPHTHONG_IPA[pair], "d", i, i + 1, L.ch + letters[i + 1].ch)
           );
@@ -318,13 +304,25 @@ function lettersToPhonemes(letters, ctx) {
           continue;
         }
       }
+      if (i === ctx.iacioRoot) {
+        if (ctx.shortRe) out.push(makePhoneme("j", "c", i, i, ""));
+        out.push(makePhoneme("j", "c", i, i, ""), makePhoneme("ɪ", "v", i, i, L.ch));
+        i++;
+        continue;
+      }
+      if (i === 0 && b === "u" && !L.marked && isVowelLetter(nb)) {
+        out.push(makePhoneme("w", "c", i, i, L.ch));
+        i++;
+        continue;
+      }
       // Consonantal i (short i only; ī is always vocalic):
       //   intervocalic → jj gemination; word-initial or root-initial
       //   after a detected prefix → j; post-consonantal → vocalic by default,
       //   with synizesis supplied through solver overrides. The u consumed by
       //   qu/ngu digraphs or an su-stem counts as consonantal material
       //   here (reliquiās = re.li.qui.ās, not *re.li.quj.jās).
-      if (b === "i" && !L.long && nb && isVowelLetter(nb)) {
+      const nextVowel = isVowelLetter(nb) || (i === n - 1 && ctx.elidedVowelAfter?.has(i));
+      if (b === "i" && !L.marked && nextVowel && i !== ctx.vocalicI) {
         const prevBare = i > 0 ? letters[i - 1].bare : null;
         const prevIsConsonantU =
           prevBare === "u" &&
@@ -426,6 +424,12 @@ function lettersToPhonemes(letters, ctx) {
         i += 1;
         continue;
       case "v":
+        if (i === 0 && !isVowelLetter(bareAt(i + 1))) {
+          out.push(makePhoneme(VOWEL_IPA.u.short, "v", i, i, L.ch));
+          i++;
+          continue;
+        }
+        // Other v spellings share the consonantal w mapping.
       case "w":
         out.push(makePhoneme("w", "c", i, i, L.ch));
         i += 1;
@@ -494,6 +498,8 @@ function parseOverrideSplit(split, wordLetters, ctx) {
     // An override covers syllable boundaries only; it must not disable the
     // [sw] phoneme mapping (suWLetter indexes the same
     // letter positions; the reconstruction check above guarantees 1:1).
+    elidedVowelAfter: ctx.elidedVowelAfter,
+    vocalicI: ctx.vocalicI,
     suWLetter: ctx.suWLetter,
     uiMonosyllable: ctx.uiMonosyllable,
     euWord: ctx.euWord,
@@ -502,10 +508,10 @@ function parseOverrideSplit(split, wordLetters, ctx) {
   // Ortho display follows the word's own spelling (letter spans are 1:1 by
   // position — the validation above guarantees equal length).
   for (const ph of phonemes) {
-    ph.letterText = wordLetters
-      .slice(ph.letterStart, ph.letterEnd + 1)
-      .map((l) => l.ch)
-      .join("");
+    if (ph.letterText) {
+      const count = [...ph.letterText].length;
+      ph.letterText = wordLetters.slice(ph.letterStart, ph.letterStart + count).map((l) => l.ch).join("");
+    }
   }
   const forced = new Set();
   let letterCursor = 0;
@@ -744,7 +750,8 @@ function computeWeights(words) {
 function assignStress(word) {
   const syls = word.syllables;
   if (syls.length === 0) return;
-  const key = word.key; // macronless, elision letters included
+  const host = word.token.notation.replace(/^(?:[^()]*\([^()]+\))+/u, "");
+  const key = host && !/[()]/u.test(host) ? wordKey(host) : word.key;
 
   // Lexical exceptions
   if (STRESS_FIRST_WORDS.has(key)) {
@@ -772,8 +779,8 @@ function assignStress(word) {
   // forms that require final stress are listed in STRESS_LAST_WORDS. If the
   // enclitic vowel is elided, as in atqu(e), this rule cannot apply and the
   // word falls through to the defaults.
-  if (word.elided.length === 0 && syls.length >= 2) {
-    const isEnclitic = key.endsWith("que") || key.endsWith("ve");
+  if (syls.length >= 2) {
+    const isEnclitic = word.pronouncedKey.endsWith("que") || word.pronouncedKey.endsWith("ve");
     if (isEnclitic && !STRESS_FIRST_WORDS.has(key)) {
       syls[syls.length - 2].stressed = true;
       return;
@@ -905,9 +912,22 @@ function analyzeWord(token, overrideSplit) {
   const pronouncedKey = wordKey(token.pronounced);
   const pronouncedMacronized = token.pronounced.toLowerCase().normalize("NFC");
   const encliticStripped = stripEncliticSuffix(key);
+  const prefixEnd = detectPrefixEnd(letters);
+  const stem = stripEncliticSuffix(pronouncedKey);
+  const eoForm = /^(?:ii|iens$|ier(?:[aeiou]|$))/u;
+  let vocalicI = null;
+  if (eoForm.test(stem) || /^iŭlus(?:que|ve|ne)?$/u.test(pronouncedMacronized)) vocalicI = 0;
+  else if (prefixEnd != null && eoForm.test(stem.slice(prefixEnd))) vocalicI = prefixEnd;
+  const compound = stripEncliticSuffix(pronouncedMacronized).match(
+    /^(ab|ad|con|dis|in|ob|sub|d[ēe]|[ēe]|pr[ōo]|tr[āa]|re)(ic(?:i[oōsuntmebēaā].*|ī|ere|er[eēiī].*|ite))$/u
+  );
   const ctx = {
+    elidedVowelAfter: token.elidedVowelAfter,
+    vocalicI,
+    iacioRoot: compound?.[1].length,
+    shortRe: compound?.[1] === "re",
     prefixBoundary: overrideSplit ? null : detectPrefixBoundary(letters),
-    prefixEnd: overrideSplit ? null : detectPrefixEnd(letters),
+    prefixEnd: overrideSplit ? null : prefixEnd,
     suWLetter: detectSuStem(pronouncedMacronized),
     uiMonosyllable: UI_MONOSYLLABLE_WORDS.has(key),
     euWord: EU_DIPHTHONG_WORDS.has(encliticStripped),
@@ -975,7 +995,7 @@ export function analyzeLatin(text, options = {}) {
   }
   const consumed = new Set();
 
-  const lines = text.normalize("NFC").split(/\r?\n/);
+  const lines = text.normalize("NFC").split(/\r\n|\r|\n/);
   const outLines = lines.map((lineText, li) => {
     const tokens = tokenizeLine(lineText);
     const words = tokens.map((tok, wi) => {

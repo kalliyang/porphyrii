@@ -1,7 +1,7 @@
 
 
-const VERSION = "porphyrii-cache-10";
-const RELEASE = "2026-11-24.1";
+const VERSION = "porphyrii-cache-11";
+const RELEASE = "2026-11-24.2";
 const PRECACHE_NAME = `precache-${VERSION}`;
 const RUNTIME_NAME = `runtime-${VERSION}`;
 
@@ -18,6 +18,7 @@ const PRECACHE = [
   "/app/turnstile.js",
   "/services/text-integrity.js",
   "/core/latin-g2p.js",
+  "/core/latin-text.js",
   "/core/latin-quantity.js",
   "/core/latin-scansion.js",
   "/core/syllable-overrides.js",
@@ -99,7 +100,7 @@ self.addEventListener("fetch", (event) => {
 
   if (event.request.method !== "GET") return;
 
-  if (event.request.mode === "navigate") {
+  if (event.request.mode === "navigate" && (url.pathname === "/" || url.pathname === "/index.html")) {
     // HTML and its module graph must come from the same installed release.
     event.respondWith(
       // Pages redirects /index.html to /. A cached redirected response is

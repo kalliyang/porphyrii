@@ -66,7 +66,7 @@ export function contractSyllableOverrides(contract) {
     let remaining = words.length > 0 ? wordLetterCount(0) : 0;
     let overflow = false;
     for (const sRaw of solverSyls) {
-      let frag = [...sRaw.normalize("NFC")];
+      let frag = [...sRaw.replace(/\([^()]*\)/g, "").normalize("NFC")];
       let continued = false; // this solver syllable already gave a fragment
       while (frag.length > 0) {
         if (wi >= words.length) {

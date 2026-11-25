@@ -123,3 +123,10 @@ test("an open older page can load its audio driver offline after an upgrade", as
   assert.equal(response.status, 200);
   assert.equal(await response.text(), "installed-asset");
 });
+
+test("unknown navigations reach the server while the home page remains cached", async () => {
+  const w = worker();
+  await w.lifecycle("install");
+  assert.equal(await (await w.request("/nonexistent-page", { mode: "navigate" })).text(), "newer-network-release");
+  assert.equal(await (await w.request("/index.html", { mode: "navigate" })).text(), "installed-html");
+});

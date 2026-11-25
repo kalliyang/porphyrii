@@ -35,7 +35,10 @@ translation: English plain text for the complete passage
 grammar_notes: concise English plain text with useful syntax and source notes
 
 Only correct an unmistakable spelling error; declare it and explain it. Never
-silently add, remove, substitute, or rearrange letters. Preserve j/i and u/v spelling.
+silently add, remove, substitute, or rearrange letters. Keep the input spelling in original_text_cleaned. In scansion_text preserve j/i;
+write consonantal [w] as v/V and vocalic [u] or [uː] as u/U. Use context for
+uirumque (virumque), Vrbs (Urbs), and uoluit (volvit or voluit). This u/v
+normalization alone leaves spelling_corrected false.
 Preserve archaic forms and spelling variants; do not modernize them as corrections.
 Identify an isolated pentameter as elegiac_pentameter. Use elegiac_couplet only
 for a passage beginning with a hexameter and alternating hexameter/pentameter.
@@ -62,8 +65,9 @@ Here Ar- and Tro- are heavy syllables, but their vowels have no macron.`;
 
 export const SOLVER_SYSTEM_PROMPT_SCAN_ONLY = `${SOLVER_HEADER}
 The input already contains quantity marks. Preserve every supplied macron and
-breve exactly; do not add or remove quantity marks. Describe suspected errors in
-grammar_notes without changing the text.`;
+breve on its original vowel and supply missing macrons on other long vowels
+according to context. Leave other short vowels unmarked. Explain any suspected
+error in a supplied mark in grammar_notes and retain that mark in scansion_text.`;
 
 export function wrapUserText(text) {
   return `<user_text>\n${text}\n</user_text>`;

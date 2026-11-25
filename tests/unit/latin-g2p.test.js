@@ -412,3 +412,54 @@ test("IPA inventory is non-empty and NFC-stable", () => {
   assert.ok(all.length > 40);
   for (const sym of all) assert.equal(sym.normalize("NFC"), sym);
 });
+
+test("editorial parentheses preserve their words and punctuation boundaries", () => {
+  assert.equal(analyzeLatin("dīxit (crēdō) pater").ipa, analyzeLatin("dīxit, crēdō, pater").ipa);
+  for (const source of ["dīxit (crēdō", "dīxit ((crēdō))", "dīxit (crēdō!)"]) {
+    assert.match(analyzeLatin(source).ipa, /ˈkreː.doː/);
+  }
+  assert.deepEqual(analyzeLatin("a\rb\r\nc\nd").lines.map((line) => line.surface), ["a", "b", "c", "d"]);
+  assert.equal(analyzeLatin("Troi(ā) antīquā").ipa, "ˈtrɔj.jan.ˈtiː.kʷaː");
+  const split = { overrides: [{ line: 0, word: 0, split: "troi" }] };
+  assert.equal(analyzeLatin("Troi(ā) antīquā", split).ipa, "ˈtrɔj.jan.ˈtiː.kʷaː");
+});
+
+test("forms of eo retain vocalic i across compound and enclitic boundaries", () => {
+  for (const [word, count] of Object.entries({ iit: 2, iērunt: 3, iēns: 2, abiit: 3, rediit: 3,
+    adiit: 3, obiit: 3, periit: 3, iniit: 3, exiit: 3, subiit: 3, trānsiit: 3, interiit: 4,
+    circumiit: 4, redierat: 4, abierunt: 4, perierint: 4, iitque: 3 })) {
+    const line = analyzeLatin(word).lines[0];
+    assert.equal(line.words[0].syllableCount, count, word);
+    assert.doesNotMatch(line.ipa, /j/, word);
+  }
+  for (const word of ["iacet", "iecur", "ieiūnus", "iniectus", "iniūria", "adiuvō", "coniungō"]) {
+    assert.match(analyzeLatin(word).ipa, /j/, word);
+  }
+});
+
+test("compounds of iacio retain a heavy prefix and reconstruct the source letters", () => {
+  for (const word of ["abicit", "adicit", "conicit", "inicit", "obicit", "subicit", "reicit", "dēicit", "prōicit", "trāicit", "ēicit", "disicit", "reicere", "obicitque"]) {
+    const line = analyzeLatin(word).lines[0];
+    assert.equal(line.syllables[0].weight, "heavy", word);
+    assert.equal(line.syllables.map((s) => s.ortho).join(""), word);
+    assert.match(line.ipa, /jɪ/);
+  }
+  assert.equal(analyzeLatin("reicit").ipa, "ˈrɛj.jɪ.kɪt");
+  assert.equal(analyzeLatin("obicit").ipa, "ˈɔb.jɪ.kɪt");
+  for (const word of ["amīcitia", "inimīcus", "initium", "cōnicus", "efficit", "officium"]) {
+    assert.doesNotMatch(analyzeLatin(word).ipa, /j/, word);
+  }
+});
+
+test("fixed adverbs, joined hosts and explicit quantities retain their stress and nuclei", () => {
+  for (const [word, ipa] of Object.entries({ dēnique: "ˈdeː.nɪ.kʷɛ", undique: "ˈʊn.dɪ.kʷɛ",
+    utique: "ˈʊ.tɪ.kʷɛ", "m(ē)ōraque": "moː.ˈra.kʷɛ", "t(ē)adhūc": "ta.ˈdhuːk",
+    "atqu(e) altae": "at.ˈkʷal.taɪ̯" })) assert.equal(analyzeLatin(word).ipa, ipa);
+  for (const [word, count] of Object.entries({ cuī: 2, huīc: 2, deĭnde: 3, ĭe: 2, Iŭlus: 3, exuō: 3, exuit: 3, exue: 3 })) {
+    assert.equal(analyzeLatin(word).lines[0].words[0].syllableCount, count, word);
+  }
+  for (const [older, modern] of [["uirumque", "virumque"], ["uolo", "volo"], ["uenit", "venit"],
+    ["uult", "vult"], ["Vrbs", "Urbs"], ["Vnde", "Unde"], ["Vt", "Ut"]]) {
+    assert.equal(analyzeLatin(older).ipa, analyzeLatin(modern).ipa, older);
+  }
+});

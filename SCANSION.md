@@ -24,10 +24,14 @@ Hiatus is a less-preferred alternative. If no ordinary reading fits, the solver
 can try one unmarked i/u becoming a glide. Orthographic -aum/-eum endings admit
 a hiatus interpretation for final -um elision. The bounded search stops at 256
 candidates. It is not a complete treatment of Greek names, synizesis, or poetic
-licenses. Supplied quantity marks are preserved.
+licenses. Restoration preserves each supplied macron or breve and fills missing long
+vowels. The original spelling is retained in the input copy. The restored text
+uses v for consonantal u and u for vocalic V (uirumque → virumque, Vrbs → Urbs).
+Only attached letter groups such as Troi(ā) represent elision. A parenthetical
+word or phrase, such as (crēdō) or (nam vōs mūtāstis et illās), is read aloud.
 
-Only when the original user input was unmarked, a finite additional pass may
-consider attested alternatives: final i in mihi/tibi/sibi/ibi/ubi, selected
+For vowels left unmarked in the original input, the solver may consider
+attested alternatives including final i in mihi/tibi/sibi/ibi/ubi, selected
 pronominal genitives in -ius, the present/perfect quantity of venit, and poetic
 initial quantity in Italia forms. Each chosen change is shown beside the line;
 the restored source text is retained separately from that reading. See

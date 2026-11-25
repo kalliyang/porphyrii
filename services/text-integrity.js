@@ -1,3 +1,4 @@
+import { classifyParentheses, validateParentheses, validateSupportedCharset } from "../core/latin-text.js";
 
 
 /**
@@ -21,25 +22,58 @@ export function normalizeLatin(text) {
 }
 
 
-export function diffLines(textA, textB) {
+export function lineWords(line) {
+  return classifyParentheses(line).match(/[\p{L}\p{M}()]+/gu) ?? [];
+}
+
+function commonSubsequenceLengths(a, b) {
+  const table = Array.from({ length: a.length + 1 }, () => new Uint32Array(b.length + 1));
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      table[i][j] = a[i] === b[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+    }
+  }
+  return table;
+}
+
+// Align unchanged words when a declared correction inserts or removes a word.
+// Unmatched words have no source quantity mask.
+export function alignSourceWords(source, target) {
+  const a = source.map(normalizeLatin);
+  const b = target.map(normalizeLatin);
+  if (a.length === b.length && a.every((word, i) => word === b[i])) return source;
+  const matches = Array(target.length).fill("");
+  const table = commonSubsequenceLengths(a, b);
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) matches[j++] = source[i++];
+    else if (table[i + 1][j] >= table[i][j + 1]) i++;
+    else j++;
+  }
+  return matches;
+}
+
+export function lineSignature(line, allowModelElisionParens = false) {
+  if (!validateSupportedCharset(line).ok || !validateParentheses(line).ok) return null;
+  const words = lineWords(line).map(normalizeLatin);
+  if (allowModelElisionParens) return JSON.stringify(words);
+  // Keep parenthesis positions, including editorial pairs around a whole word.
+  const notation = line.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
+    .replaceAll("j", "i").replaceAll("v", "u").replace(/[^\p{L}()]/gu, "");
+  return JSON.stringify([words, notation]);
+}
+
+export function diffLines(textA, textB, allowModelElisionParens = false) {
   const rawA = String(textA ?? "").split(/\r\n|\r|\n/);
   const rawB = String(textB ?? "").split(/\r\n|\r|\n/);
-  const a = rawA.map(normalizeLatin);
-  const b = rawB.map(normalizeLatin);
+  const key = (line) => lineSignature(line, allowModelElisionParens) ?? Symbol();
+  const a = rawA.map(key);
+  const b = rawB.map(key);
   const n = a.length;
   const m = b.length;
 
-  // LCS length table
-  const table = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
-  for (let i = n - 1; i >= 0; i--) {
-    for (let j = m - 1; j >= 0; j--) {
-      table[i][j] =
-        a[i] === b[j]
-          ? table[i + 1][j + 1] + 1
-          : Math.max(table[i + 1][j], table[i][j + 1]);
-    }
-  }
-
+  const table = commonSubsequenceLengths(a, b);
   const ops = [];
   let i = 0;
   let j = 0;
@@ -67,30 +101,28 @@ export function verifyIntegrity({
   originalTextCleaned,
   scansionText,
   spellingCorrected,
+  allowModelElisionParens = false,
 }) {
-  const aOk =
-    normalizeLatin(userInput) === normalizeLatin(originalTextCleaned);
-  const bOk =
-    normalizeLatin(originalTextCleaned) === normalizeLatin(scansionText);
-
+  function compare(left, right) {
+    const a = String(left ?? "").split(/\r\n|\r|\n/);
+    const b = String(right ?? "").split(/\r\n|\r|\n/);
+    const ok = a.length === b.length && a.every((line, i) => {
+      const signature = lineSignature(line, allowModelElisionParens);
+      return signature !== null && signature === lineSignature(b[i], allowModelElisionParens);
+    });
+    return { ok, diff: ok ? null : diffLines(left, right, allowModelElisionParens) };
+  }
+  const checkA = compare(userInput, originalTextCleaned);
+  const checkB = compare(originalTextCleaned, scansionText);
   let status;
-  if (aOk && bOk) {
+  if (checkA.ok && checkB.ok) {
     status = "pass";
-  } else if (spellingCorrected) {
+  } else if (spellingCorrected && [originalTextCleaned, scansionText].every((text) =>
+    validateSupportedCharset(text).ok && validateParentheses(text).ok)) {
     status = "expected-correction";
   } else {
     status = "fail";
   }
 
-  return {
-    checkA: {
-      ok: aOk,
-      diff: aOk ? null : diffLines(userInput, originalTextCleaned),
-    },
-    checkB: {
-      ok: bOk,
-      diff: bOk ? null : diffLines(originalTextCleaned, scansionText),
-    },
-    status,
-  };
+  return { checkA, checkB, status };
 }

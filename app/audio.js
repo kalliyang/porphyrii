@@ -58,6 +58,7 @@ export class AudioController {
   async load() {
     if (this.state === "ready" || this.state === "playing") return true;
     if (this.state === "loading") return false;
+    if (this.driver) { this._set("ready"); return true; }
     this._set("loading");
     try {
       this.driver = await this._loadDriver();
@@ -100,7 +101,7 @@ export class AudioController {
     try {
       this.driver?.stop?.();
     } finally {
-      if (this.state === "playing") this._set("ready");
+      if (this.driver && (this.state === "playing" || this.state === "load-error")) this._set("ready");
     }
   }
 }

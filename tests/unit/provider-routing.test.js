@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { expectedLineMeter, resolveScansion } from "../../core/latin-scansion.js";
+import { deriveIpa } from "../../app/ipa.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { callGemini, callDeepSeek, runChain, runGuard, runSolver, MODEL_DEFAULTS } from "../../functions/_lib/llm.js";
@@ -236,4 +239,93 @@ test("aborting a provider request stops both retry and fallback", async (t) => {
   await assert.rejects(runGuard({ GEMINI_API_KEY: "test", DEEPSEEK_API_KEY: "test" }, "arma", controller.signal),
     { name: "AbortError" });
   assert.equal(calls.mock.callCount(), 1);
+});
+
+test("older u and V spellings keep all reference feet and transcriptions after restoration", async (t) => {
+  let answer;
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    const request = JSON.parse(options.body);
+    assert.match(request.input, /<user_text>/);
+    assert.match(request.system_instruction, /consonantal \[w\] as v\/V/);
+    return envelope(JSON.stringify(answer));
+  });
+  let readings = 0;
+  for (const [file, meter] of [["aeneid-1-quantity.json", "dactylic_hexameter"], ["elegiac-quantity.json", "elegiac_couplet"]]) {
+    const { lines } = JSON.parse(readFileSync(new URL(`../golden/${file}`, import.meta.url)));
+    for (const [i, row] of lines.entries()) {
+      const modern = row.input.replace(/[()]/g, "");
+      const input = modern.replaceAll("v", "u").replace(/^U/, "V");
+      if (input === modern) continue;
+      answer = { ...raw, original_text_cleaned: input, scansion_text: modern, meter: expectedLineMeter(meter, i) };
+      const restored = await runSolver({ GEMINI_API_KEY: "test" }, input, true);
+      assert.ok(restored.ok, row.ref);
+      assert.equal(restored.data.original_text_cleaned, input);
+      assert.equal(restored.data.spelling_corrected, false);
+      const reference = resolveScansion({ scansion_text: modern, meter: answer.meter });
+      assert.equal(restored.data.scansion[0].status, "resolved");
+      assert.deepEqual(restored.data.scansion[0].feet, reference.scansion[0].feet);
+      assert.deepEqual(deriveIpa(restored.data).lines, deriveIpa(reference).lines);
+      readings++;
+    }
+  }
+  assert.equal(readings, 19);
+});
+
+test("invalid successful provider envelopes fall back or exhaust the chain cleanly", async (t) => {
+  for (const malformed of [null, { status: "completed", steps: {} }, { status: "completed", steps: [{ type: "model_output", content: {} }] }]) {
+    const responder = t.mock.method(globalThis, "fetch", async (url) => url.includes("deepseek")
+      ? Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(raw) } }] })
+      : Response.json(malformed));
+    const env = { GEMINI_API_KEY: "test", DEEPSEEK_API_KEY: "test" };
+    assert.equal((await runSolver(env, raw.original_text_cleaned, false)).provider, "deepseek");
+    responder.mock.mockImplementation(async () => Response.json(malformed));
+    assert.equal((await runSolver(env, raw.original_text_cleaned, false)).ok, false);
+    responder.mock.restore();
+  }
+});
+
+test("a negative language decision needs a nonempty reason", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => envelope(JSON.stringify({ is_latin: false, reject_reason: "  " })));
+  assert.equal((await runGuard({ GEMINI_API_KEY: "test" }, "arma")).ok, false);
+});
+
+test("solver projects permitted fields and fills missing macrons around existing quantities", async (t) => {
+  const input = raw.original_text_cleaned.replace("cano", "canō");
+  const data = { ...raw, original_text_cleaned: input, unexpected: "extra", allow_quantity_variants: false };
+  t.mock.method(globalThis, "fetch", async () => envelope(JSON.stringify(data)));
+  const result = await runSolver({ GEMINI_API_KEY: "test" }, input, true);
+  assert.ok(result.ok);
+  assert.equal(result.data.scansion_text, raw.scansion_text);
+  assert.deepEqual(Object.keys(result.data).sort(), [...Object.keys(raw), "scansion", "scansion_version"].sort());
+  for (const wrong of ["cano", "canŏ"]) {
+    assert.equal(validateRestoration({ ...data, scansion_text: raw.scansion_text.replace("canō", wrong) }, input, true).ok, false);
+  }
+  assert.equal(validateRestoration({ ...data, scansion_text: raw.scansion_text.replace("Arma", "Ărma") }, input, true).ok, false);
+});
+
+test("changed metre or correction declarations select a complete reading by resolved line count", async (t) => {
+  const pentameter = "ēdere, māteriā conveniente modīs.";
+  const input = raw.scansion_text + "\n" + pentameter;
+  const first = { ...raw, original_text_cleaned: input, scansion_text: input };
+  const reviewed = { ...first, meter: "elegiac_couplet", translation: "Second translation.", grammar_notes: "Second notes." };
+  const partial = { ...raw, original_text_cleaned: raw.original_text_cleaned, scansion_text: raw.original_text_cleaned };
+  const correction = { ...raw, spelling_corrected: true, correction_reason: "Spelling regularized.", translation: "Revised translation." };
+  for (const [before, after, expected, marked] of [[first, reviewed, reviewed, true], [partial, correction, correction, false],
+    [partial, { ...correction, scansion_text: partial.scansion_text }, partial, false]]) {
+    let calls = 0;
+    const mock = t.mock.method(globalThis, "fetch", async () => envelope(JSON.stringify(calls++ ? after : before)));
+    const result = await runSolver({ GEMINI_API_KEY: "test" }, before.original_text_cleaned, marked);
+    assert.equal(calls, 2);
+    for (const key of Object.keys(raw).filter((key) => key !== "meter_confidence")) {
+      assert.equal(result.data[key], expected[key], key);
+    }
+    mock.mock.restore();
+  }
+});
+
+test("a declared inserted word still preserves supplied marks on the following words", () => {
+  const input = "Arma canō";
+  const data = { ...raw, original_text_cleaned: input, spelling_corrected: true, correction_reason: "Supplied a missing word." };
+  assert.equal(validateRestoration({ ...data, scansion_text: "Arma virumque canō" }, input, true).ok, true);
+  assert.equal(validateRestoration({ ...data, scansion_text: "Arma virumque cano" }, input, true).ok, false);
 });

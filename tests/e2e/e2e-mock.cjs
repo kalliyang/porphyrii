@@ -85,7 +85,7 @@ const out = { checks: {} };
     return route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ ok: true, input_has_macron: false }),
+      body: JSON.stringify({ ok: true, input_has_macron: false, validate_token: "fixture" }),
     });
   });
   await page.route("**/api/analyze", (route) =>

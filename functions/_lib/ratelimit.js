@@ -26,10 +26,15 @@ const DAY_MS = 86_400_000;
  * @param {string} ip client IP (CF-Connecting-IP)
  * @returns {Promise<{ ok: boolean, status?: number, reason?: string, retryAfter?: number }>}
  */
+function quota(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export async function checkRateLimit(env, ip, scope = "analyze") {
   if (!["validate", "analyze"].includes(scope)) throw new TypeError("Unknown rate limit scope");
-  const perHour = Number.parseInt(env.RATE_LIMIT_PER_HOUR ?? "30", 10) || 30;
-  const dailyCap = Number.parseInt(env.GLOBAL_DAILY_CAP ?? "500", 10) || 500;
+  const perHour = quota(env.RATE_LIMIT_PER_HOUR, 30);
+  const dailyCap = quota(env.GLOBAL_DAILY_CAP, 500);
 
   const now = Date.now();
   const hourBucket = Math.floor(now / HOUR_MS);
