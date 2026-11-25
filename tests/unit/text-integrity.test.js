@@ -1,6 +1,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { precheck, validateParentheses } from "../../functions/_lib/precheck.js";
+import { validateRestoration } from "../../functions/_lib/restoration.js";
 import {
   normalizeLatin,
   diffLines,
@@ -236,8 +238,7 @@ test("diffLines: inserted and deleted lines", () => {
   ]);
 });
 
-test("word boundaries, supplied parentheses and output diacritics agree across both checks", async () => {
-  const { validateRestoration } = await import("../../functions/_lib/restoration.js");
+test("word boundaries, supplied parentheses and output diacritics agree across both checks", () => {
   for (const [input, altered] of [["Troiae", "Troi ae"], ["Arma virumque", "Armavirumque"],
     ["Arma", "Ar(ma)"], ["Arma", "(Arma)"], ["mult(um)", "multum"], ["poeta", "poëta"],
     ["hymnus", "hy\u0306mnus"], ["caelum", "cælum"], ["arma", "(arma"]]) {
@@ -253,4 +254,32 @@ test("word boundaries, supplied parentheses and output diacritics agree across b
     }
   }
   assert.ok(verifyIntegrity({ userInput: "arma (virumque)", originalTextCleaned: "arma (virumque)", scansionText: "arma (virumque)" }).checkB.ok);
+});
+
+test("editorial parentheses spanning verse lines survive the entire text comparison", () => {
+  for (const input of [
+    "Aeole (namque tibi dīvum pater atque hominum rēx\net mulcēre dedit flūctūs et tollere ventō),",
+    "(saxa vocant Italī mediīs quae in flūctibus Ārās,\ndorsum immāne marī summō)",
+  ]) {
+    assert.ok(precheck(input).ok);
+    const data = { language: "la", spelling_corrected: false, correction_reason: null,
+      meter: "dactylic_hexameter", meter_confidence: "high", translation: "A passage from Vergil.", grammar_notes: "",
+      original_text_cleaned: input, scansion_text: input };
+    assert.ok(validateRestoration(data, input).ok);
+    assert.equal(verifyIntegrity({ userInput: input, originalTextCleaned: input, scansionText: input }).status, "pass");
+  }
+  for (const text of ["a(b\nc)d", "ā(b\rc)".normalize("NFD"), "(b\r\nc)d", "(\n)", "a ((b))", "(arma"]) {
+    assert.equal(validateParentheses(text).ok, false, text);
+  }
+});
+
+test("blank lines and final line endings align with the restored verse lines", () => {
+  for (const newline of ["\r", "\n", "\r\n"]) {
+    for (const [input, cleaned] of [["Arma virumque cano" + newline, "Arma virumque cano"],
+      ["Arma" + newline + newline + "virumque", "Arma" + newline + "virumque"]]) {
+      const result = verifyIntegrity({ userInput: input, originalTextCleaned: cleaned, scansionText: cleaned });
+      assert.equal(result.status, "pass");
+      assert.deepEqual(diffLines(input, cleaned), cleaned.split(newline).map((text) => ({ type: "same", text })));
+    }
+  }
 });

@@ -24,20 +24,21 @@ export const RESTORATION_SCHEMA = {
 };
 
 const lines = (text) => text.split(/\r\n|\r|\n/).filter((line) => normalizeLatin(line));
+const UNSAFE_OUTPUT_CHAR_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069\uD800-\uDFFF]/u;
 function preservesMarks(input, restored) {
   const target = lineWords(restored);
   const aligned = alignSourceWords(lineWords(input), target);
   const letters = (s) => [...s.replace(/[()]/g, "").normalize("NFC")];
   const mark = (letter) => letter.normalize("NFD").slice(1);
   return aligned.every((word, i) => {
-    if (!word) return true;
     const output = letters(target[i]);
+    if (!word) return !output.some((ch) => mark(ch) === "\u0306");
     return letters(word).every((ch, j) =>
       mark(ch) ? mark(ch) === mark(output[j]) : mark(output[j]) !== "\u0306");
   });
 }
 
-export function validateRestoration(data, input, hasMacron) {
+export function validateRestoration(data, input) {
   const errors = [];
   if (!data || typeof data !== "object" || Array.isArray(data)) return { ok: false, errors: ["response must be an object"] };
   for (const key of RESTORATION_SCHEMA.required) {
@@ -53,6 +54,11 @@ export function validateRestoration(data, input, hasMacron) {
     if (data[field].length > limit) errors.push(`${field} exceeds its size limit`);
   }
   if (data.correction_reason?.length > 2000) errors.push("correction_reason exceeds its size limit");
+  for (const field of ["scansion_text", "original_text_cleaned", "translation", "grammar_notes", "correction_reason"]) {
+    if (typeof data[field] === "string" && UNSAFE_OUTPUT_CHAR_RE.test(data[field])) {
+      errors.push(`${field} contains unsupported control characters`);
+    }
+  }
   if (errors.length) return { ok: false, errors };
   const original = lines(input);
   const restored = lines(data.scansion_text);
@@ -78,7 +84,8 @@ export function validateRestoration(data, input, hasMacron) {
         ? `line ${i + 1}: preserve word boundaries and letters`
         : `line ${i + 1}: preserve the input's elision parentheses without adding new ones`);
     }
-    if (hasMacron && !preservesMarks(line, reading)) errors.push(`line ${i + 1}: preserve the user's existing quantity marks exactly`);
+    if (!preservesMarks(line, reading)) errors.push(`line ${i + 1}: preserve the user's existing quantity marks without adding breves`);
+    if (source === copy && !preservesMarks(line, cleaned[i] ?? "")) errors.push(`line ${i + 1}: preserve the user's existing quantity marks in original_text_cleaned`);
   });
   return { ok: errors.length === 0, errors };
 }

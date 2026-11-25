@@ -255,6 +255,7 @@ function makePhoneme(ipa, kind, letterStart, letterEnd, letterText, extra = {}) 
 
 function lettersToPhonemes(letters, ctx) {
   const out = [];
+  const hostStart = ctx.hostOffset ?? 0;
   const n = letters.length;
   const bareAt = (i) => (i < n ? letters[i].bare : null);
   const boundaryBetween = (i, j) =>
@@ -269,7 +270,7 @@ function lettersToPhonemes(letters, ctx) {
     // an indivisible, natural-heavy COMPOUND NUCLEUS. The off-glide renders
     // as its own phoneme (la.json has no uI row) but is not a coda
     // consonant: liaison must never move it ("cui erat" keeps cui heavy).
-    if (ctx.uiMonosyllable && b === "u" && bareAt(i + 1) === "i" && !L.marked && !letters[i + 1].marked) {
+    if (ctx.uiMonosyllable && i === hostStart + 1 && b === "u" && bareAt(i + 1) === "i" && !L.marked && !letters[i + 1].marked) {
       out.push(makePhoneme("ʊ", "v", i, i + 1, L.ch, { compound: true }));
       out.push(
         makePhoneme("j", "c", i + 1, i + 1, letters[i + 1].ch, { offglide: true })
@@ -296,7 +297,7 @@ function lettersToPhonemes(letters, ctx) {
           !letters[i + 1].marked;
         const listed =
           (pair === "eu" && ctx.euWord) || (pair === "ei" && ctx.eiWord);
-        if (always || (listed && !L.marked && !letters[i + 1].marked)) {
+        if (always || (listed && !BREVE_VOWELS.has(L.ch) && !letters[i + 1].marked)) {
           out.push(
             makePhoneme(DIPHTHONG_IPA[pair], "d", i, i + 1, L.ch + letters[i + 1].ch)
           );
@@ -310,7 +311,9 @@ function lettersToPhonemes(letters, ctx) {
         i++;
         continue;
       }
-      if (i === 0 && b === "u" && !L.marked && isVowelLetter(nb)) {
+      // In the u-spelling of viv-, both the initial and the stem-final u are [w].
+      const vivStemU = i === hostStart + 2 && /^[uv]$/u.test(bareAt(hostStart)) && bareAt(hostStart + 1) === "i";
+      if ((i === hostStart || vivStemU) && b === "u" && !L.marked && isVowelLetter(nb)) {
         out.push(makePhoneme("w", "c", i, i, L.ch));
         i++;
         continue;
@@ -328,14 +331,14 @@ function lettersToPhonemes(letters, ctx) {
           prevBare === "u" &&
           ((i >= 2 && letters[i - 2].bare === "q") ||
             (i >= 3 && letters[i - 2].bare === "g" && letters[i - 3].bare === "n") ||
-            i - 1 === ctx.suWLetter);
+            i - 1 === ctx.suWLetter || out.at(-1)?.ipa === "w");
         if (prevBare && isVowelLetter(prevBare) && !prevIsConsonantU) {
           out.push(makePhoneme("j", "c", i, i, L.ch));
           out.push(makePhoneme("j", "c", i, i, ""));
           i += 1;
           continue;
         }
-        if (i === 0 || i === ctx.prefixEnd) {
+        if (i === hostStart || i === ctx.prefixEnd) {
           out.push(makePhoneme("j", "c", i, i, L.ch));
           i += 1;
           continue;
@@ -424,7 +427,7 @@ function lettersToPhonemes(letters, ctx) {
         i += 1;
         continue;
       case "v":
-        if (i === 0 && !isVowelLetter(bareAt(i + 1))) {
+        if (i === hostStart && !isVowelLetter(bareAt(i + 1))) {
           out.push(makePhoneme(VOWEL_IPA.u.short, "v", i, i, L.ch));
           i++;
           continue;
@@ -492,19 +495,8 @@ function parseOverrideSplit(split, wordLetters, ctx) {
     long: LONG_VOWELS.has(ch),
     marked: LONG_VOWELS.has(ch) || BREVE_VOWELS.has(ch),
   }));
-  const phonemes = lettersToPhonemes(splitLetters, {
-    prefixBoundary: null,
-    prefixEnd: null, // the split string spells consonantal i explicitly (j)
-    // An override covers syllable boundaries only; it must not disable the
-    // [sw] phoneme mapping (suWLetter indexes the same
-    // letter positions; the reconstruction check above guarantees 1:1).
-    elidedVowelAfter: ctx.elidedVowelAfter,
-    vocalicI: ctx.vocalicI,
-    suWLetter: ctx.suWLetter,
-    uiMonosyllable: ctx.uiMonosyllable,
-    euWord: ctx.euWord,
-    eiWord: ctx.eiWord,
-  });
+  // The split spells consonantal i explicitly. Its letters share the host's indices.
+  const phonemes = lettersToPhonemes(splitLetters, ctx);
   // Ortho display follows the word's own spelling (letter spans are 1:1 by
   // position — the validation above guarantees equal length).
   for (const ph of phonemes) {
@@ -750,8 +742,7 @@ function computeWeights(words) {
 function assignStress(word) {
   const syls = word.syllables;
   if (syls.length === 0) return;
-  const host = word.token.notation.replace(/^(?:[^()]*\([^()]+\))+/u, "");
-  const key = host && !/[()]/u.test(host) ? wordKey(host) : word.key;
+  const key = word.hostKey;
 
   // Lexical exceptions
   if (STRESS_FIRST_WORDS.has(key)) {
@@ -910,26 +901,43 @@ function analyzeWord(token, overrideSplit) {
   const letters = parseLetters(token.pronounced);
   const key = wordKey(token.surface);
   const pronouncedKey = wordKey(token.pronounced);
-  const pronouncedMacronized = token.pronounced.toLowerCase().normalize("NFC");
-  const encliticStripped = stripEncliticSuffix(key);
-  const prefixEnd = detectPrefixEnd(letters);
-  const stem = stripEncliticSuffix(pronouncedKey);
-  const eoForm = /^(?:ii|iens$|ier(?:[aeiou]|$))/u;
+  const proclitic = token.notation.match(
+    /^((?:(?:[^aeiouyāēīōūȳăĕĭŏŭ()]*|qu|i)\([^()]+\))+)(?=.+)/iu
+  )?.[1] ?? "";
+  const hostOffset = [...proclitic.replace(/\([^()]*\)/g, "")].length;
+  const hostSurface = token.notation.slice(proclitic.length).replace(/[()]/g, "");
+  const hostLetters = hostOffset ? letters.slice(hostOffset) : letters;
+  const hostKey = proclitic ? wordKey(hostSurface) : key;
+  const hostMacronized = hostSurface.toLowerCase().normalize("NFC").replace(/^v(?![aeiouyāēīōūȳăĕĭŏŭ])/u, "u");
+  const hostPronouncedMacronized = token.pronounced.slice(hostOffset).toLowerCase().normalize("NFC");
+  const encliticStripped = stripEncliticSuffix(hostKey);
+  const hostPrefixEnd = detectPrefixEnd(hostLetters);
+  const hostBoundary = overrideSplit ? null : detectPrefixBoundary(hostLetters);
+  const suStem = detectSuStem(hostPronouncedMacronized);
+  const eoForm = /^(?:ii(?:$|[mstv])|iens$|ier(?:[aeiou]|$))/u;
+  const eoVowelPrefix = encliticStripped.match(/^(co|intro|circu)(?=ii|iens$|ier)/u)?.[1];
   let vocalicI = null;
-  if (eoForm.test(stem) || /^iŭlus(?:que|ve|ne)?$/u.test(pronouncedMacronized)) vocalicI = 0;
-  else if (prefixEnd != null && eoForm.test(stem.slice(prefixEnd))) vocalicI = prefixEnd;
-  const compound = stripEncliticSuffix(pronouncedMacronized).match(
-    /^(ab|ad|con|dis|in|ob|sub|d[ēe]|[ēe]|pr[ōo]|tr[āa]|re)(ic(?:i[oōsuntmebēaā].*|ī|ere|er[eēiī].*|ite))$/u
+  if (eoForm.test(encliticStripped) || /^i[ūŭ]l(?:us|ī|ō|um|e)(?:que|ve|ne)?$/u.test(hostMacronized)) {
+    vocalicI = hostOffset;
+  } else if (eoVowelPrefix && eoForm.test(encliticStripped.slice(eoVowelPrefix.length))) {
+    vocalicI = hostOffset + eoVowelPrefix.length;
+  } else if (hostPrefixEnd != null && !/^(?:de|pe)ier/u.test(encliticStripped) && eoForm.test(encliticStripped.slice(hostPrefixEnd))) {
+    vocalicI = hostOffset + hostPrefixEnd;
+  }
+  const compound = stripEncliticSuffix(hostMacronized).match(
+    /^(ab|ad|con|dis|in|ob|sub|d[ēe]|[ēe]|pr[ōo]|tr[āa]|re)(ic(?:i[oōsuntmebēaā].*|ī|e|ere|er[eēiī].*|ite))$/u
   );
+  const rootIdx = compound ? hostOffset + compound[1].length : undefined;
   const ctx = {
+    hostOffset,
     elidedVowelAfter: token.elidedVowelAfter,
     vocalicI,
-    iacioRoot: compound?.[1].length,
+    iacioRoot: rootIdx !== undefined && rootIdx < letters.length && !letters[rootIdx].marked ? rootIdx : undefined,
     shortRe: compound?.[1] === "re",
-    prefixBoundary: overrideSplit ? null : detectPrefixBoundary(letters),
-    prefixEnd: overrideSplit ? null : prefixEnd,
-    suWLetter: detectSuStem(pronouncedMacronized),
-    uiMonosyllable: UI_MONOSYLLABLE_WORDS.has(key),
+    prefixBoundary: hostBoundary == null ? null : hostOffset + hostBoundary,
+    prefixEnd: overrideSplit || hostPrefixEnd == null ? null : hostOffset + hostPrefixEnd,
+    suWLetter: suStem < 0 ? -1 : hostOffset + suStem,
+    uiMonosyllable: UI_MONOSYLLABLE_WORDS.has(encliticStripped),
     euWord: EU_DIPHTHONG_WORDS.has(encliticStripped),
     eiWord: EI_DIPHTHONG_WORDS.has(encliticStripped),
   };
@@ -964,6 +972,7 @@ function analyzeWord(token, overrideSplit) {
   return {
     token,
     key,
+    hostKey,
     pronouncedKey,
     letters,
     phonemes,

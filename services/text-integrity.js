@@ -55,7 +55,7 @@ export function alignSourceWords(source, target) {
 }
 
 export function lineSignature(line, allowModelElisionParens = false) {
-  if (!validateSupportedCharset(line).ok || !validateParentheses(line).ok) return null;
+  if (!validateSupportedCharset(line).ok) return null;
   const words = lineWords(line).map(normalizeLatin);
   if (allowModelElisionParens) return JSON.stringify(words);
   // Keep parenthesis positions, including editorial pairs around a whole word.
@@ -64,9 +64,13 @@ export function lineSignature(line, allowModelElisionParens = false) {
   return JSON.stringify([words, notation]);
 }
 
+function nonemptyLines(text) {
+  return text.split(/\r\n|\r|\n/).filter((line) => normalizeLatin(line));
+}
+
 export function diffLines(textA, textB, allowModelElisionParens = false) {
-  const rawA = String(textA ?? "").split(/\r\n|\r|\n/);
-  const rawB = String(textB ?? "").split(/\r\n|\r|\n/);
+  const rawA = nonemptyLines(String(textA ?? ""));
+  const rawB = nonemptyLines(String(textB ?? ""));
   const key = (line) => lineSignature(line, allowModelElisionParens) ?? Symbol();
   const a = rawA.map(key);
   const b = rawB.map(key);
@@ -104,9 +108,12 @@ export function verifyIntegrity({
   allowModelElisionParens = false,
 }) {
   function compare(left, right) {
-    const a = String(left ?? "").split(/\r\n|\r|\n/);
-    const b = String(right ?? "").split(/\r\n|\r|\n/);
-    const ok = a.length === b.length && a.every((line, i) => {
+    const rawL = String(left ?? "");
+    const rawR = String(right ?? "");
+    const validText = (s) => validateSupportedCharset(s).ok && validateParentheses(s).ok;
+    const a = nonemptyLines(rawL);
+    const b = nonemptyLines(rawR);
+    const ok = validText(rawL) && validText(rawR) && a.length === b.length && a.every((line, i) => {
       const signature = lineSignature(line, allowModelElisionParens);
       return signature !== null && signature === lineSignature(b[i], allowModelElisionParens);
     });

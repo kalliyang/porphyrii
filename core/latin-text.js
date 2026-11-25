@@ -54,6 +54,7 @@ export function validateSupportedCharset(text) {
 }
 
 export function validateParentheses(text) {
+  text = text.normalize("NFC");
   const invalid = { ok: false, reason: "Unmatched, empty, or nested parentheses found. Please check your parentheses and try again." };
   let open = -1;
   for (let i = 0; i < text.length; i++) {
@@ -61,9 +62,12 @@ export function validateParentheses(text) {
       if (open >= 0) return invalid;
       open = i;
     } else if (text[i] === ")") {
-      if (open < 0 || !text.slice(open + 1, i).trim()) return invalid;
+      if (open < 0) return invalid;
+      const inner = text.slice(open + 1, i);
+      const attached = SUPPORTED_LETTER.test(text[open - 1] ?? "") || SUPPORTED_LETTER.test(text[i + 1] ?? "");
+      if (!inner.trim() || (attached && /[\r\n]/.test(inner))) return invalid;
       open = -1;
-    } else if (open >= 0 && /[\r\n]/.test(text[i])) return invalid;
+    }
   }
   return open < 0 ? { ok: true } : invalid;
 }

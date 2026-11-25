@@ -329,3 +329,28 @@ test("a declared inserted word still preserves supplied marks on the following w
   assert.equal(validateRestoration({ ...data, scansion_text: "Arma virumque canō" }, input, true).ok, true);
   assert.equal(validateRestoration({ ...data, scansion_text: "Arma virumque cano" }, input, true).ok, false);
 });
+
+test("restoration preserves supplied marks in both copies and cannot introduce breves", () => {
+  for (const field of ["scansion_text", "original_text_cleaned"]) {
+    for (const [input, changed] of [["saepe", "saĕpe"], ["canō", "cano"], ["canŏ", "canō"]]) {
+      const data = { ...raw, original_text_cleaned: input, scansion_text: input, [field]: changed };
+      assert.equal(validateRestoration(data, input).ok, false, field);
+    }
+  }
+  const correction = { ...raw, original_text_cleaned: "arma", scansion_text: "arma virŭmque",
+    spelling_corrected: true, correction_reason: "Supplied an omitted word." };
+  assert.equal(validateRestoration(correction, "arma").ok, false);
+  assert.ok(validateRestoration({ ...raw, original_text_cleaned: "canŏ", scansion_text: "canŏ" }, "canŏ").ok);
+});
+
+test("all output text fields reject controls, direction overrides and lone surrogates", () => {
+  for (const field of ["scansion_text", "original_text_cleaned", "translation", "grammar_notes", "correction_reason"]) {
+    for (const ch of ["\u0000", "\u0085", "\u202E", "\u2066", "\uD800", "\uDC00"]) {
+      const data = { ...raw, [field]: (raw[field] ?? "") + ch };
+      const result = validateRestoration(data, raw.original_text_cleaned);
+      assert.equal(result.ok, false);
+      assert.ok(result.errors.includes(field + " contains unsupported control characters"));
+    }
+  }
+  assert.ok(validateRestoration({ ...raw, translation: "Verse\tand prose\n📖" }, raw.original_text_cleaned).ok);
+});

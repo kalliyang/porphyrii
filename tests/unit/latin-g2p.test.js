@@ -463,3 +463,88 @@ test("fixed adverbs, joined hosts and explicit quantities retain their stress an
     assert.equal(analyzeLatin(older).ipa, analyzeLatin(modern).ipa, older);
   }
 });
+
+test("a supplied split retains the glide and heavy prefix of iaciō compounds", () => {
+  for (const [word, expected] of [["reicit", "ˈrɛj.jɪ.kɪt"], ["obiciō", "ɔb.ˈjɪ.kɪ.oː"],
+    ["s(ē)obicit", "ˈsɔb.jɪ.kɪt"]]) {
+    const split = word.replace(/\([^()]*\)/g, "");
+    const line = line1(word, { overrides: [{ line: 0, word: 0, split }] });
+    assert.equal(line.ipa, expected);
+    assert.equal(line.syllables[0].weight, "heavy");
+  }
+});
+
+test("imperatives and elided endings retain the glide of iaciō compounds", () => {
+  for (const word of ["inice", "abice", "obice", "subice", "reice", "abici(ō)", "inici(am)", "abicer(e)", "inic(e)"]) {
+    const line = line1(word);
+    assert.equal(line.syllables[0].weight, "heavy", word);
+    assert.match(line.ipa, /jɪ/, word);
+  }
+});
+
+test("listed ei contracts with an initial macron and separates with a breve or marked i", () => {
+  assert.equal(ipa("dēinde"), "ˈdeɪ̯n.dɛ");
+  for (const [word, count] of [["dēinde", 2], ["dēin", 1], ["dēinceps", 2], ["deĭnde", 3], ["dĕinde", 3], ["deīnde", 3]]) {
+    assert.equal(line1(word).words[0].syllableCount, count, word);
+  }
+});
+
+test("vocalic i after initial consonantal u agrees with the spelling in v", () => {
+  assert.equal(ipa("uia"), "ˈwɪ.a");
+  for (const [word, modern, count] of [["uia", "via", 2], ["uiātor", "viātor", 3], ["uiuō", "vivō", 2]]) {
+    assert.equal(ipa(word), ipa(modern), word);
+    assert.equal(line1(word).words[0].syllableCount, count, word);
+  }
+});
+
+test("the cases of Iūlus keep vocalic i while Iūlius retains its glide", () => {
+  for (const word of ["Iūlus", "Iūlī", "Iūlō", "Iūlum", "Iūle"]) {
+    assert.equal(line1(word).words[0].syllableCount, 3, word);
+    assert.match(ipa(word), /^ɪ\.ˈuː\./u, word);
+  }
+  assert.equal(ipa("Iŭlō"), "ˈɪ.ʊ.loː");
+  assert.equal(ipa("Iūlius"), "ˈjuː.lɪ.ʊs");
+  for (const word of ["Iūnō", "iūs"]) assert.match(ipa(word), /^ˈj/u);
+});
+
+test("forms of eō keep vocalic i after vowel prefixes and before elided endings", () => {
+  for (const [word, count] of [["coiit", 3], ["coiērunt", 4], ["coiēre", 4], ["abi(ī)", 2],
+    ["redi(ī)", 2], ["i(ī)", 1], ["introiit", 4], ["circuiit", 4]]) {
+    assert.equal(line1(word).words[0].syllableCount, count, word);
+    assert.doesNotMatch(ipa(word), /j/, word);
+  }
+  assert.equal(ipa("abi(ī)"), "ˈa.bɪ");
+  assert.equal(ipa("obiicit"), "ˈɔb.jɪ.kɪt");
+  assert.equal(ipa("dēierat"), "ˈdeːj.jɛ.rat");
+  for (const word of ["adiicit", "abiicit", "subiicit", "dēierō", "pēierō"]) {
+    assert.match(ipa(word), /j/, word);
+    assert.equal(line1(word).words[0].syllableCount, 3, word);
+  }
+});
+
+test("the heavy ui nucleus of cui and huic survives an enclitic", () => {
+  for (const word of ["cuique", "cuive", "cuine", "huicque"]) {
+    const line = line1(word);
+    assert.equal(line.words[0].syllableCount, 2, word);
+    assert.equal(line.syllables[0].weight, "heavy", word);
+    assert.match(line.syllables[0].ipa, /ʊj/, word);
+  }
+  assert.equal(ipa("cuique"), "ˈkʊj.kʷɛ");
+});
+
+test("elided monosyllables preserve host onsets, quantities and stress", () => {
+  for (const [word, count, expected] of [
+    ["m(ē)adiuvat", 3, "ˈmad.jʊ.wat"], ["s(ē)obicit", 3, "ˈsɔb.jɪ.kɪt"], ["s(ī)Vrbs", 1, "ˈsʊrbs"],
+    ["qu(ae)iniūria", 4, "kʷɪn.ˈjuː.rɪ.a"], ["c(um)(ī)omnēs", 2, "ˈkɔm.neːs"], ["t(ē)itaqu(e)", 2, "ˈtɪ.takʷ"],
+    ["(ā)iit", 2, "ˈɪ.ɪt"], ["factum(e)st", 2, "ˈfak.tʊmst"],
+  ]) {
+    assert.equal(line1(word).words[0].syllableCount, count, word);
+    assert.equal(ipa(word), expected, word);
+  }
+  for (const word of ["m(ē)huic", "s(ī)Vrbs"]) {
+    const line = line1(word);
+    assert.equal(line.words[0].syllableCount, 1);
+    assert.equal(line.syllables[0].weight, "heavy");
+  }
+  assert.equal(line1("s(ī)assuēscit").words[0].syllableCount, 3);
+});

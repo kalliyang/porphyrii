@@ -1,7 +1,7 @@
 
 
-const VERSION = "porphyrii-cache-11";
-const RELEASE = "2026-11-24.2";
+const VERSION = "porphyrii-cache-12";
+const RELEASE = "2026-11-25.1";
 const PRECACHE_NAME = `precache-${VERSION}`;
 const RUNTIME_NAME = `runtime-${VERSION}`;
 

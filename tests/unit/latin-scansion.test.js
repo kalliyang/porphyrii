@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { scanVerseLine, resolveScansion, expectedLineMeter, validFootStructure } from "../../core/latin-scansion.js";
+import { scanVerseLine, resolveScansion, expectedLineMeter, validFootStructure, elisionForms } from "../../core/latin-scansion.js";
 import { normalizeLatin } from "../../services/text-integrity.js";
 import { validateScansion } from "../../core/latin-quantity.js";
 import { buildScansionView } from "../../app/scansion-view.js";
@@ -110,6 +110,64 @@ for (const [reference, text, liaison, meter] of [
 }
 
 const heavyTail = (count) => "nōn ".repeat(count) + "est";
+
+test("a glide override cannot put the heavy prefix of reiciō in a short position", () => {
+  assert.equal(scanVerseLine("mīra reiciō " + heavyTail(7), "dactylic_hexameter").status, "unresolved");
+});
+
+test("imperative inice, contracted dēinde and enclitic cuique fit their verse positions", () => {
+  for (const text of [
+    "inice, namque potes, portūsque requīre Velīnōs",
+    "vīna bonus quae dēinde cadīs onerārat Acestēs",
+    "nec Rutulōs solvō sua cuique exōrsa labōrem",
+    "nunc locus arvōrum ingeniīs quae rōbora cuique",
+  ]) checkedReading(text);
+});
+
+test("uia and via give the same metrical feet", () => {
+  for (const text of ["perge modo et, quā tē dūcit uia, dīrige gressum", "Arma virumque uiā, Troiae quī prīmus ab ōrīs"]) {
+    assert.equal(checkedReading(text).line.pattern, checkedReading(text.replace("ui", "vi")).line.pattern);
+  }
+});
+
+test("the oblique forms of Iūlus preserve Vergil's fifth-foot dactyl", () => {
+  for (const text of ["At puer Ascanius, cui nunc cognōmen Iūlō", "Iūlius, ā magnō dēmissum nōmen Iūlō",
+    "Ascanium surgentem et spēs hērēdis Iūlī", "per genitōrem ōrō, per spēs surgentis Iūlī"]) {
+    const { line } = checkedReading(text);
+    assert.equal(line.pattern.split("|")[4], "HLL");
+    assert.equal(line.note, null);
+  }
+});
+
+test("coiērunt gives Ovid's third-foot dactyl", () => {
+  assert.equal(checkedReading("sīc ubi complexū coiērunt membra tenācī").line.pattern, "HLL|HH|HLL|HH|HLL|HX");
+});
+
+test("elision choices follow the pronounced onset of the next word", () => {
+  for (const [word, elided, host] of [["impia", "impi(a)", "iit"], ["cāra", "cār(a)", "ierantque"],
+    ...["iēns", "iērunt", "ierant", "iīs", "Iūlus", "Iūlō", "Iŭlus", "ĭit", "Vrbs", "hiemem", "hī", "omnēs"]
+      .map((host) => ["multum", "mult(um)", host])]) {
+    assert.deepEqual(elisionForms([word, host]), [
+      { words: [elided, host], cost: 0 }, { words: [word, host], cost: 1 },
+    ], host);
+  }
+  for (const host of ["uirumque", "uolo", "iam", "iacet", "Iūnō", "Iūlius", "vōs"]) {
+    assert.deepEqual(elisionForms(["multum", host]), [{ words: ["multum", host], cost: 0 }], host);
+  }
+});
+
+test("the metrical reading distinguishes ordinary elision from hiatus before iit", () => {
+  for (const [text, elision] of [["impia iit " + heavyTail(8), "impi(a) iit"],
+    ["arma virumque canō, iam prīmus cāra ierantque", "cār(a) ierantque"]]) {
+    const { line } = checkedReading(text);
+    assert.ok(line.pronunciation.text.includes(elision));
+    assert.equal(line.cost, 0);
+  }
+  const { line } = checkedReading("arma virumque canō, Troiae quī multum iit rēx");
+  assert.match(line.pronunciation.text, /multum iit/);
+  assert.equal(line.cost, 1);
+  assert.match(line.note, /hiatus/);
+});
 test("elision preserves written h without a cross-word aspirated stop", () => {
   for (const prefix of ["cum", "tē"]) {
     const reading = checkedReading(`nunc ${prefix} habet est ${heavyTail(8)}`);

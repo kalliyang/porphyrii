@@ -45,13 +45,11 @@ function fits(syllable, weight) {
 
 function canElideInto(word) {
   const raw = pronounced(word).normalize("NFC");
-  if (/^[īĭūŭ]/iu.test(raw)) return true;
-  if (/^[iu][aeiouyāēīōūȳăĕĭŏŭ]/iu.test(raw)) return false;
-  if (/^v(?![aeiouyāēīōūȳăĕĭŏŭ])/iu.test(raw)) return true;
-  return /^[aeiouyāēīōūȳăĕĭŏŭ]/iu.test(raw.replace(/^h/i, ""));
+  const firstIpa = analyzeLatin(raw).lines[0]?.syllables[0]?.ipa ?? "";
+  return /^ˈ?h?[aeiouyɛɪɔʊ]/u.test(firstIpa);
 }
 
-function elisionForms(words, budget = MAX_CANDIDATES) {
+export function elisionForms(words, budget = MAX_CANDIDATES) {
   let states = [{ words: [], cost: 0 }];
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
